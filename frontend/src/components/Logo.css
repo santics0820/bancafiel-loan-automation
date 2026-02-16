@@ -1,0 +1,16 @@
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  font-size: 1.5rem;
+  text-transform: uppercase;
+}
+
+.logo-mark {
+  width: 24px;
+  height: 24px;
+  background: currentColor;
+  clip-path: none;
+}

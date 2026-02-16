@@ -1,0 +1,33 @@
+.view-toggle {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  background: #FFFFFF;
+  padding: 0;
+  border-radius: 0;
+  display: flex;
+  gap: 0;
+  z-index: 9999;
+  border: none;
+}
+
+.view-btn {
+  padding: 12px 20px;
+  font-size: 0.875rem;
+  border-radius: 0;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  font-weight: 700;
+  color: var(--brand-blue);
+  text-transform: uppercase;
+}
+
+.view-btn.active {
+  background: var(--brand-blue);
+  color: #FFFFFF;
+  border: 2px solid #FFFFFF;
+  margin: -2px;
+  position: relative;
+  z-index: 2;
+}
