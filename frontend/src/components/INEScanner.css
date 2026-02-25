@@ -1,0 +1,189 @@
+/* Wrapper plano — sin caja ni fondo propio */
+.ine-scanner {
+  width: 100%;
+}
+
+/* ── Header: volver + steps en una sola fila ────────────── */
+.ine-steps {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  background: var(--brand-blue);
+  border-bottom: 2px solid #FFFFFF;
+}
+
+.ine-back-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: #FFFFFF;
+  padding: 6px 14px;
+  font-family: var(--font-family);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.ine-back-btn:hover {
+  border-color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ine-steps-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.ine-step {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-family);
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.3);
+  transition: color 0.2s;
+}
+
+.ine-step.active { color: #FFFFFF; }
+.ine-step.done   { color: var(--risk-low); }
+
+.ine-step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.ine-step-divider {
+  width: 20px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+/* ── Área de cámara ─────────────────────────────────────── */
+.ine-camera {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9; /* fija la altura al mismo ratio que el stream de video */
+  line-height: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Overlay limpio — solo el recuadro guía, sin texto */
+.ine-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Guía INE — 72% ancho, proporción ID-1 (1.585:1)
+   box-shadow trick: oscurece todo excepto el interior del recuadro */
+.ine-guide {
+  position: relative;
+  width: 72%;
+  aspect-ratio: 1.585;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 6px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.52);
+  pointer-events: none;
+}
+
+/* Esquinas de la guía INE */
+.ine-guide::before,
+.ine-guide::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: #FFFFFF;
+  border-style: solid;
+}
+
+.ine-guide::before {
+  top: -2px;
+  left: -2px;
+  border-width: 3px 0 0 3px;
+  border-radius: 4px 0 0 0;
+}
+
+.ine-guide::after {
+  top: -2px;
+  right: -2px;
+  border-width: 3px 3px 0 0;
+  border-radius: 0 4px 0 0;
+}
+
+/* Guía rostro — 42% ancho, elipse de retrato (0.73 ratio)
+   Mismos porcentajes que el JS de crop                     */
+.face-guide {
+  position: relative;
+  width: 42%;
+  aspect-ratio: 0.73;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.52);
+  pointer-events: none;
+}
+
+/* ── Barra de instrucciones + acciones ──────────────────── */
+.ine-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(28, 85, 255, 0.7);
+}
+
+.ine-instruction-text {
+  text-align: center;
+  font-family: var(--font-family);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #FFFFFF;
+  line-height: 1.4;
+}
+
+.ine-instruction-text span {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.68rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.6;
+}
+
+.ine-actions-buttons {
+  display: flex;
+  gap: 12px;
+}
+
+.ine-actions-buttons .btn {
+  flex: 1;
+}
+
+/* Preview de la captura (ya recortada) */
+.ine-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* escala la foto sin deformar el contenedor */
+  display: block;
+}
