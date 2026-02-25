@@ -116,6 +116,36 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 
 ---
 
+## Team Roles & Ownership
+
+| Person | GitHub | Role | Owns |
+|---|---|---|---|
+| **Santiago** | `santics0820` | Backend lead + AWS admin | Architecture, infrastructure, PR reviews, deploys |
+| **Fernando** | `nitrofgm` | Frontend lead | React app (`frontend/`), UI components, API wiring in Week 3 |
+| **Ricardo** | `ricfranco05` | Backend contributor | Fraud & Approval pipeline — `detectFraud`, `approvalNotifier`, their tests, Step Functions verification |
+| **Lizet** | `lizetpinae-ux` | Backend contributor | Customer communications — `notificationSender`, `erpUpdater`, their tests, health endpoint fix, analytics tests |
+| **Montse** | `Mon500` | Backend contributor | Document intelligence — `extractData` OCR parsers (bank statement + income), `processDocument` + `validateData` tests |
+
+**When someone tells you their name, look them up here and tailor your help to their specific ownership area.**
+
+### What each person needs installed
+- **Santiago & Fernando:** Everything (Python, Node, SAM CLI, AWS CLI)
+- **Ricardo, Lizet, Montse:** VS Code, Git, Claude Code, Python 3.13 only — no AWS CLI, no SAM, no credentials needed
+- **First command for Ricardo/Lizet/Montse:** `pip install pytest pytest-cov moto[s3,sns] boto3 pg8000`
+
+### Branch naming for each person
+```
+feature/ricardo-fraud-tests
+feature/ricardo-approval-tests
+feature/lizet-notification-tests
+feature/lizet-health-fix
+feature/montse-ocr-parsers
+feature/montse-extractor-tests
+feature/fernando-api-wiring
+```
+
+---
+
 ## Git Workflow — NEVER VIOLATE
 
 **Branch structure:**
