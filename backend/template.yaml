@@ -1,0 +1,802 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: BancaFiel Loan Processing Backend - Complete Serverless Architecture
+
+# ==============================================
+# GLOBAL DEFAULTS FOR ALL LAMBDA FUNCTIONS
+# ==============================================
+Globals:
+  Function:
+    Timeout: 30
+    Runtime: python3.13
+    MemorySize: 512
+    Environment:
+      Variables:
+        DB_HOST: !GetAtt PostgreSQLDB.Endpoint.Address
+        DB_PORT: '5432'
+        DB_NAME: bancafiel
+        DB_USER: !Ref DBUsername
+        DB_PASSWORD: !Ref DBPassword
+        ENVIRONMENT: !Ref Environment
+        INCOMING_BUCKET: !Sub bancafiel-incoming-${AWS::AccountId}-${Environment}
+        PROCESSED_BUCKET: !Sub bancafiel-processed-${AWS::AccountId}-${Environment}
+        REJECTED_BUCKET: !Sub bancafiel-rejected-${AWS::AccountId}-${Environment}
+    Layers:
+      - !Ref CommonLayer
+
+# ==============================================
+# PARAMETERS
+# ==============================================
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+
+  DBUsername:
+    Type: String
+    Default: bancafiel_admin
+
+  DBPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+
+# ==============================================
+# RESOURCES
+# ==============================================
+Resources:
+
+  # ============================================
+  # NETWORKING (VPC for RDS - Lambdas outside)
+  # ============================================
+  BancaFielVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub bancafiel-vpc-${Environment}
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub bancafiel-igw-${Environment}
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref BancaFielVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref BancaFielVPC
+      Tags:
+        - Key: Name
+          Value: !Sub bancafiel-public-rt-${Environment}
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref BancaFielVPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub bancafiel-public-1-${Environment}
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref BancaFielVPC
+      CidrBlock: 10.0.11.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub bancafiel-public-2-${Environment}
+
+  Subnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  Subnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS PostgreSQL access
+      VpcId: !Ref BancaFielVPC
+      SecurityGroupIngress:
+        # Allow access from anywhere (dev only - tightened in prod)
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub bancafiel-db-sg-${Environment}
+
+  # ============================================
+  # RDS POSTGRESQL DATABASE
+  # ============================================
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Subnet group for BancaFiel RDS
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+
+  PostgreSQLDB:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Retain
+    Properties:
+      DBInstanceIdentifier: !Sub bancafiel-postgres-${Environment}
+      Engine: postgres
+      EngineVersion: '15.7'
+      DBInstanceClass: db.t3.micro   # Free tier eligible
+      AllocatedStorage: '20'
+      StorageType: gp2
+      DBName: bancafiel
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      PubliclyAccessible: true       # dev only - allows Lambda (outside VPC) to connect
+      BackupRetentionPeriod: 0       # free tier: automated backups disabled
+      StorageEncrypted: false        # free tier: encryption requires paid tier
+      MultiAZ: false
+      Tags:
+        - Key: Name
+          Value: !Sub bancafiel-db-${Environment}
+
+  # ============================================
+  # S3 BUCKETS (documents storage)
+  # ============================================
+  IncomingDocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bancafiel-incoming-${AWS::AccountId}-${Environment}
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveAfter90Days
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: GLACIER
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3600
+
+  ProcessedDocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bancafiel-processed-${AWS::AccountId}-${Environment}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter7Years
+            Status: Enabled
+            ExpirationInDays: 2555
+
+  RejectedDocumentsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bancafiel-rejected-${AWS::AccountId}-${Environment}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter30Days
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # ============================================
+  # SNS TOPICS
+  # ============================================
+  TextractCompletionTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub bancafiel-textract-done-${Environment}
+      DisplayName: BancaFiel Textract Completion
+
+  ApproverNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub bancafiel-approver-notify-${Environment}
+      DisplayName: BancaFiel Approver Notifications
+
+  # ============================================
+  # IAM ROLE - Textract can publish to SNS
+  # ============================================
+  TextractSNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub bancafiel-textract-sns-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: textract.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: TextractPublishSNS
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sns:Publish
+                Resource: !Ref TextractCompletionTopic
+
+  # ============================================
+  # LAMBDA LAYER (shared utilities)
+  # ============================================
+  CommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub bancafiel-common-layer-${Environment}
+      Description: Shared utilities - database, logging, responses
+      ContentUri: src/layers/
+      CompatibleRuntimes:
+        - python3.13
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.13
+
+  # ============================================
+  # API GATEWAY
+  # ============================================
+  BancaFielAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub bancafiel-api-${Environment}
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: NONE  # Will add Cognito auth in Week 3
+
+  # ============================================
+  # LAMBDA #1: processDocument
+  # Triggered by: S3 upload (via SAM Events)
+  # ============================================
+  ProcessDocumentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-processDocument-${Environment}
+      CodeUri: src/lambdas/document-processor/
+      Handler: handler.handler
+      Description: Receives S3 upload, starts Textract job, saves document metadata
+      Environment:
+        Variables:
+          TEXTRACT_SNS_TOPIC_ARN: !Ref TextractCompletionTopic
+          TEXTRACT_ROLE_ARN: !GetAtt TextractSNSRole.Arn
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectVersion
+              Resource: !Sub "arn:aws:s3:::bancafiel-incoming-${AWS::AccountId}-${Environment}/*"
+            - Effect: Allow
+              Action:
+                - textract:StartDocumentTextDetection
+                - textract:StartDocumentAnalysis
+              Resource: '*'
+            - Effect: Allow
+              Action: iam:PassRole
+              Resource: !GetAtt TextractSNSRole.Arn
+      Events:
+        # SAM automatically handles the circular dependency here
+        S3Upload:
+          Type: S3
+          Properties:
+            Bucket: !Ref IncomingDocumentsBucket
+            Events: s3:ObjectCreated:*
+
+  # ============================================
+  # LAMBDA #2: extractData
+  # Triggered by: SNS (Textract completion)
+  # ============================================
+  ExtractDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-extractData-${Environment}
+      CodeUri: src/lambdas/data-extractor/
+      Handler: handler.handler
+      Description: Gets Textract results, extracts structured fields, saves to DB
+      Timeout: 60
+      Environment:
+        Variables:
+          VALIDATE_DATA_FUNCTION: !Sub bancafiel-validateData-${Environment}
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:GetDocumentTextDetection
+                - textract:GetDocumentAnalysis
+              Resource: '*'
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-validateData-${Environment}
+      Events:
+        TextractDone:
+          Type: SNS
+          Properties:
+            Topic: !Ref TextractCompletionTopic
+
+  # ============================================
+  # LAMBDA #3: validateData
+  # Triggered by: Lambda #2 (async invoke)
+  # ============================================
+  ValidateDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-validateData-${Environment}
+      CodeUri: src/lambdas/data-validator/
+      Handler: handler.handler
+      Description: Validates extracted data against DB rules, links customer
+      Environment:
+        Variables:
+          DETECT_FRAUD_FUNCTION: !Sub bancafiel-detectFraud-${Environment}
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-detectFraud-${Environment}
+
+  # ============================================
+  # LAMBDA #4: detectFraud
+  # Triggered by: Lambda #3 (async invoke)
+  # ============================================
+  DetectFraudFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-detectFraud-${Environment}
+      CodeUri: src/lambdas/fraud-detector/
+      Handler: handler.handler
+      Description: Runs AWS Fraud Detector, scores risk, updates application
+      Timeout: 60
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - frauddetector:GetEventPrediction
+                - frauddetector:CreateEvent
+              Resource: '*'
+
+  # ============================================
+  # LAMBDA #5: approvalNotifier
+  # Triggered by: Step Functions (wait for token)
+  # ============================================
+  ApprovalNotifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-approvalNotifier-${Environment}
+      CodeUri: src/lambdas/approval-notifier/
+      Handler: handler.handler
+      Description: Notifies approver via SNS, stores Step Functions task token
+      Environment:
+        Variables:
+          APPROVER_SNS_TOPIC_ARN: !Ref ApproverNotificationTopic
+          FRONTEND_URL: 'https://bancafiel.com'
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: sns:Publish
+              Resource: !Ref ApproverNotificationTopic
+      Events:
+        # Expose approval/reject via API Gateway
+        ApproveApplication:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/loans/{id}/approve
+            Method: POST
+        RejectApplication:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/loans/{id}/reject
+            Method: POST
+
+  # ============================================
+  # LAMBDA #6: updateERP
+  # Triggered by: Step Functions
+  # ============================================
+  UpdateERPFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-updateERP-${Environment}
+      CodeUri: src/lambdas/erp-updater/
+      Handler: handler.handler
+      Description: Updates application status in RDS, logs decision for audit
+      Environment:
+        Variables:
+          NOTIFY_FUNCTION: !Sub bancafiel-notificationSender-${Environment}
+
+  # ============================================
+  # LAMBDA #7: notificationSender
+  # Triggered by: Lambda #6 (async invoke)
+  # ============================================
+  NotificationSenderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-notificationSender-${Environment}
+      CodeUri: src/lambdas/notification-sender/
+      Handler: handler.handler
+      Description: Sends SES email to customer (approved/rejected/received)
+      Environment:
+        Variables:
+          SES_FROM_EMAIL: noreply@bancafiel.com
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendTemplatedEmail
+              Resource: '*'
+
+  # ============================================
+  # API GATEWAY LAMBDAS (REST endpoints)
+  # ============================================
+  ListApplicationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-listApplications-${Environment}
+      CodeUri: src/api/routes/
+      Handler: applications.list_applications
+      Description: GET /api/loans - List applications with filters
+      Events:
+        GetLoans:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/loans
+            Method: GET
+
+  GetApplicationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-getApplication-${Environment}
+      CodeUri: src/api/routes/
+      Handler: applications.get_application
+      Description: GET /api/loans/{id} - Get single application
+      Events:
+        GetLoan:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/loans/{id}
+            Method: GET
+
+  GetAnalyticsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-getAnalytics-${Environment}
+      CodeUri: src/api/routes/
+      Handler: analytics.get_analytics
+      Description: GET /api/analytics - Dashboard metrics
+      Events:
+        Analytics:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/analytics
+            Method: GET
+
+  SubmitApplicationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-submitApplication-${Environment}
+      CodeUri: src/api/routes/
+      Handler: applications.submit_application
+      Description: POST /api/loans - Submit new application + upload to S3
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub "arn:aws:s3:::bancafiel-incoming-${AWS::AccountId}-${Environment}/*"
+            - Effect: Allow
+              Action: states:StartExecution
+              Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:bancafiel-loan-workflow-${Environment}"
+      Events:
+        SubmitLoan:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/loans
+            Method: POST
+
+  HealthCheckFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-healthCheck-${Environment}
+      CodeUri: src/api/routes/
+      Handler: health.handler
+      Description: GET /health - System health check
+      Events:
+        Health:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /health
+            Method: GET
+
+  # ============================================
+  # STEP FUNCTIONS - Loan Processing Workflow
+  # ============================================
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub bancafiel-stepfunctions-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambdas
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-*-${Environment}"
+
+  LoanWorkflow:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub bancafiel-loan-workflow-${Environment}
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "BancaFiel Loan Application Processing Workflow",
+          "StartAt": "CheckFraudScore",
+          "States": {
+
+            "CheckFraudScore": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.fraud_risk_level",
+                  "StringEquals": "HIGH",
+                  "Next": "AutoReject"
+                },
+                {
+                  "Variable": "$.fraud_risk_level",
+                  "StringEquals": "MEDIUM",
+                  "Next": "NotifyApproverSenior"
+                }
+              ],
+              "Default": "NotifyApproverAnalyst"
+            },
+
+            "NotifyApproverAnalyst": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+              "Parameters": {
+                "FunctionName": "${ApprovalNotifierFunction.Arn}",
+                "Payload": {
+                  "application_id.$": "$.application_id",
+                  "approver_type": "analyst",
+                  "task_token.$": "$$.Task.Token"
+                }
+              },
+              "TimeoutSeconds": 86400,
+              "Next": "ProcessDecision"
+            },
+
+            "NotifyApproverSenior": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
+              "Parameters": {
+                "FunctionName": "${ApprovalNotifierFunction.Arn}",
+                "Payload": {
+                  "application_id.$": "$.application_id",
+                  "approver_type": "senior_officer",
+                  "task_token.$": "$$.Task.Token"
+                }
+              },
+              "TimeoutSeconds": 86400,
+              "Next": "ProcessDecision"
+            },
+
+            "ProcessDecision": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.decision",
+                  "StringEquals": "APPROVED",
+                  "Next": "UpdateERPApproved"
+                }
+              ],
+              "Default": "UpdateERPRejected"
+            },
+
+            "AutoReject": {
+              "Type": "Task",
+              "Resource": "${UpdateERPFunction.Arn}",
+              "Parameters": {
+                "application_id.$": "$.application_id",
+                "status": "REJECTED",
+                "reason": "Automatically rejected: High fraud risk score"
+              },
+              "Next": "SendRejectionEmail"
+            },
+
+            "UpdateERPApproved": {
+              "Type": "Task",
+              "Resource": "${UpdateERPFunction.Arn}",
+              "Parameters": {
+                "application_id.$": "$.application_id",
+                "status": "APPROVED",
+                "approved_by.$": "$.approved_by",
+                "notes.$": "$.notes"
+              },
+              "Next": "SendApprovalEmail"
+            },
+
+            "UpdateERPRejected": {
+              "Type": "Task",
+              "Resource": "${UpdateERPFunction.Arn}",
+              "Parameters": {
+                "application_id.$": "$.application_id",
+                "status": "REJECTED",
+                "rejected_by.$": "$.rejected_by",
+                "reason.$": "$.reason"
+              },
+              "Next": "SendRejectionEmail"
+            },
+
+            "SendApprovalEmail": {
+              "Type": "Task",
+              "Resource": "${NotificationSenderFunction.Arn}",
+              "Parameters": {
+                "application_id.$": "$.application_id",
+                "type": "approved"
+              },
+              "End": true
+            },
+
+            "SendRejectionEmail": {
+              "Type": "Task",
+              "Resource": "${NotificationSenderFunction.Arn}",
+              "Parameters": {
+                "application_id.$": "$.application_id",
+                "type": "rejected"
+              },
+              "End": true
+            }
+          }
+        }
+
+  # ============================================
+  # CLOUDWATCH - Monitoring Dashboard
+  # ============================================
+  BancaFielDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub BancaFiel-${Environment}
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda Invocations & Errors",
+                "metrics": [
+                  ["AWS/Lambda", "Invocations", "FunctionName", "bancafiel-processDocument-${Environment}", {"label": "processDocument"}],
+                  [".", "Invocations", ".", "bancafiel-extractData-${Environment}", {"label": "extractData"}],
+                  [".", "Invocations", ".", "bancafiel-validateData-${Environment}", {"label": "validateData"}],
+                  [".", "Invocations", ".", "bancafiel-detectFraud-${Environment}", {"label": "detectFraud"}],
+                  [".", "Errors", ".", "bancafiel-processDocument-${Environment}", {"label": "Errors", "color": "#d62728"}]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 0, "width": 12, "height": 6,
+              "properties": {
+                "title": "Lambda Duration (ms)",
+                "metrics": [
+                  ["AWS/Lambda", "Duration", "FunctionName", "bancafiel-extractData-${Environment}", {"stat": "Average"}],
+                  [".", "Duration", ".", "bancafiel-detectFraud-${Environment}", {"stat": "Average"}]
+                ],
+                "period": 300,
+                "region": "${AWS::Region}",
+                "view": "timeSeries"
+              }
+            }
+          ]
+        }
+
+# ==============================================
+# OUTPUTS
+# ==============================================
+Outputs:
+  APIGatewayURL:
+    Description: Backend API base URL
+    Value: !Sub https://${BancaFielAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub ${AWS::StackName}-APIURL
+
+  DatabaseEndpoint:
+    Description: RDS PostgreSQL endpoint
+    Value: !GetAtt PostgreSQLDB.Endpoint.Address
+    Export:
+      Name: !Sub ${AWS::StackName}-DBEndpoint
+
+  IncomingBucketName:
+    Description: S3 bucket for incoming documents
+    Value: !Ref IncomingDocumentsBucket
+
+  ProcessedBucketName:
+    Description: S3 bucket for processed documents
+    Value: !Ref ProcessedDocumentsBucket
+
+  LoanWorkflowArn:
+    Description: Step Functions state machine ARN
+    Value: !Ref LoanWorkflow
+    Export:
+      Name: !Sub ${AWS::StackName}-WorkflowArn
+
+  TextractTopicArn:
+    Description: SNS topic for Textract completion
+    Value: !Ref TextractCompletionTopic
+
+  ApproverTopicArn:
+    Description: SNS topic for approver notifications
+    Value: !Ref ApproverNotificationTopic

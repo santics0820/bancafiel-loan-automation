@@ -30,6 +30,7 @@ __pycache__/
 *.tfstate
 *.tfstate.backup
 .terraform/
+samconfig.toml
 
 # IDE
 .vscode/
