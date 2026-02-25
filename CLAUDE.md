@@ -13,11 +13,11 @@
 ## CRITICAL — PATH Fix (prefix ALL sam/aws commands with this)
 
 ```bash
-export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+export PATH="/usr/local/bin:/opt/homebrew/bin:/Users/santiagocairesanchez/Library/Python/3.13/bin:$PATH"
 ```
 
 Every terminal session that runs `sam` or `aws` CLI **must** start with this export.
-Without it, `sam: command not found` errors occur even when SAM is installed.
+SAM is installed at `/Users/santiagocairesanchez/Library/Python/3.13/bin/sam` via pip.
 
 ---
 

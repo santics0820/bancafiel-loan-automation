@@ -6,7 +6,7 @@ Deploy BancaFiel backend to AWS using SAM.
 
 ### Step 1 — Fix PATH (always required first)
 ```bash
-export PATH="/usr/local/bin:/opt/homebrew/bin:$PATH"
+export PATH="/usr/local/bin:/opt/homebrew/bin:/Users/santiagocairesanchez/Library/Python/3.13/bin:$PATH"
 ```
 
 ### Step 2 — Enter backend directory
