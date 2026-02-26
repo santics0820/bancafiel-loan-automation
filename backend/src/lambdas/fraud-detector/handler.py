@@ -5,7 +5,7 @@ Calls AWS Fraud Detector, scores risk, triggers Step Functions
 import json
 import boto3
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, UTC
 
 try:
     from utils.logger import setup_logger, log_event, log_error
@@ -40,6 +40,7 @@ def handler(event, context):
 
         # Try AWS Fraud Detector, fallback to rule-based
         fraud_score, risk_level, reasons = run_fraud_detection(app_data, application_id)
+        dup_count = count_duplicate_applications(app_data['customer_id'], application_id)
 
         # Save fraud check result
         execute_insert("""
@@ -51,7 +52,7 @@ def handler(event, context):
             fraud_score,
             risk_level,
             json.dumps(reasons),
-            count_duplicate_applications(app_data['customer_id'], application_id)
+            dup_count,
         ))
 
         # Update application with fraud results
@@ -59,7 +60,7 @@ def handler(event, context):
             UPDATE applications
             SET fraud_score = %s, fraud_risk_level = %s, updated_at = %s
             WHERE id = %s
-        """, (fraud_score, risk_level, datetime.utcnow(), application_id))
+        """, (fraud_score, risk_level, datetime.now(UTC), application_id))
 
         create_application_history(
             application_id, 'fraud_check_completed', 'system',

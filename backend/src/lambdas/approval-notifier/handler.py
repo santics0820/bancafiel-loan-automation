@@ -6,7 +6,7 @@ Also handles POST /api/loans/{id}/approve and /reject (API Gateway events)
 import json
 import boto3
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 try:
     from utils.logger import setup_logger, log_event, log_error
@@ -142,7 +142,7 @@ def handle_approve(event):
             'loanId': application_id,
             'status': 'approved',
             'message': 'Application approved successfully',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(UTC).isoformat()
         })
 
     except Exception as e:
@@ -190,7 +190,7 @@ def handle_reject(event):
             'loanId': application_id,
             'status': 'rejected',
             'message': 'Application rejected',
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.now(UTC).isoformat()
         })
 
     except Exception as e:

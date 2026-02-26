@@ -125,6 +125,7 @@ class TestHandleApprove:
         output = json.loads(call_kwargs["output"])
         assert output["decision"] == "APPROVED"
         assert output["application_id"] == "app-001"
+        assert output["notes"] == "All checks passed"
 
     def test_token_not_found_returns_404(self):
         event = _api_event("/api/loans/missing/approve", path_params={"id": "missing"})
