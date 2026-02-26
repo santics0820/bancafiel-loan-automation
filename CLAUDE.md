@@ -103,6 +103,24 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 - CORS `AllowOrigin: '*'` — acceptable for dev, lock down for prod
 - `DBPassword=BancaFiel2024Secure!` is in samconfig.toml — **never commit samconfig.toml to public repo**
 
+## Test Coverage Progress
+
+| Lambda | Owner | Tests | Coverage | Status |
+|---|---|---|---|---|
+| `detectFraud` | Ricardo | `tests/unit/test_fraud_detector.py` | 83% | ✅ Done — merged to dev |
+| `approvalNotifier` | Ricardo | `tests/unit/test_approval_notifier.py` | 83% | ✅ Done — merged to dev |
+| `notificationSender` | Lizet | — | 0% | 🔲 Pending |
+| `erpUpdater` | Lizet | — | 0% | 🔲 Pending |
+| `processDocument` | Montse | — | 0% | 🔲 Pending |
+| `validateData` | Montse | — | 0% | 🔲 Pending |
+| `extractData` | Montse | — | 0% | 🔲 Pending (OCR parsers also pending) |
+
+**Other open items:**
+- Health endpoint bug — `execute_query_single` not imported in `health.py` (Lizet)
+- Analytics tests (Lizet)
+- AWS Fraud Detector not yet configured in console (Santiago)
+- SES sender `noreply@bancafiel.com` not yet verified (Santiago)
+
 ---
 
 ## Available Workflows (Skills)
