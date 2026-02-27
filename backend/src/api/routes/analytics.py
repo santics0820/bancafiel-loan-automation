@@ -3,7 +3,7 @@ API Routes: Analytics
 Handler for GET /api/analytics
 """
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 try:
     from utils.logger import setup_logger, log_error
@@ -22,8 +22,9 @@ def get_analytics(event, context):
     """GET /api/analytics?startDate=2026-02-01&endDate=2026-02-15"""
     try:
         params = event.get('queryStringParameters') or {}
-        end_date = params.get('endDate', datetime.utcnow().date().isoformat())
-        start_date = params.get('startDate', (datetime.utcnow() - timedelta(days=30)).date().isoformat())
+        now_utc = datetime.now(UTC)
+        end_date = params.get('endDate', now_utc.date().isoformat())
+        start_date = params.get('startDate', (now_utc - timedelta(days=30)).date().isoformat())
 
         # Aggregate stats
         stats = execute_query_single("""
