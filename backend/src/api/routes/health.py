@@ -3,7 +3,7 @@ API Routes: Health Check
 GET /health - verifies API and DB connectivity
 """
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 
 try:
     from utils.database import execute_query_single
@@ -22,7 +22,7 @@ def handler(event, context):
 
         return success_response({
             'status': 'healthy' if db_ok else 'degraded',
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(UTC).isoformat(),
             'services': {
                 'api': 'ok',
                 'database': 'ok' if db_ok else 'error'

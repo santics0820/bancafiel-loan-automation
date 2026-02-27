@@ -5,7 +5,7 @@ Updates application status in RDS after approval decision
 import json
 import boto3
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 try:
     from utils.logger import setup_logger, log_event, log_error
@@ -35,6 +35,7 @@ def handler(event, context):
         })
 
         if status == 'APPROVED':
+            now_utc = datetime.now(UTC)
             execute_insert("""
                 UPDATE applications
                 SET status = 'APPROVED',
@@ -43,7 +44,7 @@ def handler(event, context):
                     processed_at = %s,
                     updated_at = %s
                 WHERE id = %s
-            """, (approved_by, notes, datetime.utcnow(), datetime.utcnow(), application_id))
+            """, (approved_by, notes, now_utc, now_utc, application_id))
 
             create_application_history(
                 application_id, 'approved', approved_by or 'system',
@@ -52,6 +53,7 @@ def handler(event, context):
             )
 
         elif status == 'REJECTED':
+            now_utc = datetime.now(UTC)
             execute_insert("""
                 UPDATE applications
                 SET status = 'REJECTED',
@@ -60,7 +62,7 @@ def handler(event, context):
                     processed_at = %s,
                     updated_at = %s
                 WHERE id = %s
-            """, (rejected_by or 'system', reason, datetime.utcnow(), datetime.utcnow(), application_id))
+            """, (rejected_by or 'system', reason, now_utc, now_utc, application_id))
 
             create_application_history(
                 application_id, 'rejected', rejected_by or 'system',
