@@ -1,0 +1,11 @@
+[
+  { "text": "BANCO EJEMPLO", "confidence": 98.0 },
+  { "text": "CLABE Interbancaria: 012345678901234567", "confidence": 97.5 },
+  { "text": "No. Cuenta: 1234567890", "confidence": 96.0 },
+  { "text": "RFC ABCD010203ABC", "confidence": 95.0 },
+  { "text": "Periodo 01/01/2026 - 31/01/2026", "confidence": 94.0 },
+  { "text": "Saldo final $12,345.67", "confidence": 93.0 },
+  { "text": "Saldo promedio $10,000.00", "confidence": 92.0 },
+  { "text": "Depositos $25,000.00", "confidence": 91.0 },
+  { "text": "Retiros $5,000.00", "confidence": 90.0 }
+]
