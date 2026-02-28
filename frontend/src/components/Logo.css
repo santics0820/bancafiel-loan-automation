@@ -1,16 +1,16 @@
-.logo {
+.logo-mark {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
   display: flex;
   align-items: center;
   gap: 12px;
-  font-weight: 900;
-  letter-spacing: -0.02em;
-  font-size: 1.5rem;
-  text-transform: uppercase;
 }
 
-.logo-mark {
-  width: 24px;
-  height: 24px;
-  background: currentColor;
-  clip-path: none;
+.logo-orb {
+  width: 32px;
+  height: 32px;
+  background: radial-gradient(circle at 30% 30%, #fff, #94a3b8, #1e293b);
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
 }

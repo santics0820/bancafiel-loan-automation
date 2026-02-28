@@ -1,12 +1,13 @@
-import './Logo.css'
+import React from 'react';
+import './Logo.css';
 
-function Logo({ className = '' }) {
+const Logo = ({ className = "" }) => {
   return (
-    <div className={`logo ${className}`}>
-      <div className="logo-mark"></div>
+    <div className={`logo-mark chrome-text ${className}`}>
+      <div className="logo-orb"></div>
       BANCAFIEL
     </div>
-  )
-}
+  );
+};
 
-export default Logo
+export default Logo;
