@@ -6,7 +6,7 @@ import json
 import boto3
 import re
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 try:
     from utils.logger import setup_logger, log_event, log_error
@@ -87,7 +87,7 @@ def handler(event, context):
                 UPDATE applications
                 SET customer_id = %s, status = 'PROCESSING', updated_at = %s
                 WHERE id = %s
-            """, (customer_id, datetime.utcnow(), application_id))
+            """, (customer_id, datetime.now(UTC), application_id))
 
         # 5. Log audit trail
         create_application_history(

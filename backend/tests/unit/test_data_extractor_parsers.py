@@ -1,3 +1,13 @@
+"""
+Unit tests for Lambda #2: data-extractor OCR parsers
+(backend/src/lambdas/data-extractor/handler.py)
+
+Covers extract_bank_statement_fields() and extract_income_fields()
+with inline inputs and fixture-based end-to-end pairs.
+
+Run from the backend/ directory:
+    python -m pytest tests/ -v --cov=src/lambdas/data-extractor --cov-report=term-missing
+"""
 import importlib.util
 import os
 import sys

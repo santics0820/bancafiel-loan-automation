@@ -5,7 +5,7 @@ Triggered by S3 upload → Starts Amazon Textract processing
 import json
 import boto3
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 # These imports will come from Lambda Layer
 try:
@@ -120,7 +120,7 @@ def handler(event, context):
                     file_size,
                     job_id,
                     'IN_PROGRESS' if job_id else 'PENDING',
-                    datetime.utcnow()
+                    datetime.now(UTC)
                 ))
 
                 log_event(logger, 'document_saved_to_db', {
