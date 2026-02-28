@@ -19,7 +19,7 @@ except ImportError:
 logger = setup_logger(__name__)
 ses_client = boto3.client('ses', region_name='us-east-1')
 
-FROM_EMAIL = os.environ.get('SES_FROM_EMAIL', 'noreply@bancafiel.com')
+FROM_EMAIL = os.environ.get('SES_FROM_EMAIL', 'bancafiel.noreply@gmail.com')
 
 EMAIL_TEMPLATES = {
     'received': {

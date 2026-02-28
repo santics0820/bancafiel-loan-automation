@@ -119,7 +119,7 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 - ~~Health endpoint bug~~ — fixed by Lizet ✅
 - ~~Analytics tests~~ — done by Lizet ✅
 - AWS Fraud Detector not yet configured in console (Santiago)
-- SES sender `noreply@bancafiel.com` not yet verified (Santiago)
+- ~~SES sender~~ — `bancafiel.noreply@gmail.com` verified in us-east-1 ✅ (dev)
 
 ---
 
