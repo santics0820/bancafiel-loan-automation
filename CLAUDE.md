@@ -120,6 +120,7 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 - ~~Analytics tests~~ — done by Lizet ✅
 - AWS Fraud Detector not yet configured in console (Santiago)
 - ~~SES sender~~ — `bancafiel.noreply@gmail.com` verified in us-east-1 ✅ (dev)
+- Frontend API wiring — Fernando 🔲 see `docs/technical/FRONTEND_WIRING.md`
 
 ---
 
@@ -139,7 +140,7 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 | Person | GitHub | Role | Owns |
 |---|---|---|---|
 | **Santiago** | `santics0820` | Backend lead + AWS admin | Architecture, infrastructure, PR reviews, deploys |
-| **Fernando** | `nitrofgm` | Frontend lead | React app (`frontend/`), UI components, API wiring in Week 3 |
+| **Fernando** | `nitrofgm` | Frontend lead | React app (`frontend/`), UI components, API wiring — see `docs/technical/FRONTEND_WIRING.md` |
 | **Ricardo** | `ricfranco05` | Backend contributor | Fraud & Approval pipeline — `detectFraud`, `approvalNotifier`, their tests, Step Functions verification |
 | **Lizet** | `lizetpinae-ux` | Backend contributor | Customer communications — `notificationSender`, `erpUpdater`, their tests, health endpoint fix, analytics tests |
 | **Montse** | `Mon500` | Backend contributor | Document intelligence — `extractData` OCR parsers (bank statement + income), `processDocument` + `validateData` tests |
