@@ -5,7 +5,7 @@ Handlers for all /api/loans endpoints
 import json
 import boto3
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 try:
     from utils.logger import setup_logger, log_event, log_error
@@ -14,6 +14,8 @@ try:
 except ImportError:
     import logging
     def setup_logger(name): return logging.getLogger(name)
+    def log_event(l, t, d): l.info(f"{t}: {d}")
+    def log_error(l, t, e, c=None): l.error(f"{t}: {e}")
     def success_response(d, s=200): return {'statusCode': s, 'body': json.dumps(d, default=str)}
     def error_response(m, s=400, c=None): return {'statusCode': s, 'body': json.dumps({'error': m})}
     def not_found_response(m='Not found'): return {'statusCode': 404, 'body': json.dumps({'error': m})}
@@ -161,7 +163,7 @@ def submit_application(event, context):
             loan_amount,
             float(body.get('monthlyIncome') or 0),
             float(body.get('existingDebt') or 0),
-            datetime.utcnow()
+            datetime.now(UTC)
         ))
 
         application_id = str(result[0]['id'])

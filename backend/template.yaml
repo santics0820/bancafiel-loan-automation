@@ -281,8 +281,6 @@ Resources:
       CompatibleRuntimes:
         - python3.13
       RetentionPolicy: Retain
-    Metadata:
-      BuildMethod: python3.13
 
   # ============================================
   # API GATEWAY
