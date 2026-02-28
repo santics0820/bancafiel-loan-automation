@@ -1,137 +1,59 @@
 :root {
-  --brand-blue: #1C55FF;
-  --brand-blue-dark: #0033CC;
-  --surface-bg: #1C55FF;
-  --surface-card: transparent;
-  --text-main: #FFFFFF;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --text-inverse: #1C55FF;
-
-  --border-light: rgba(255, 255, 255, 0.3);
-  --border-strong: #FFFFFF;
-
-  --risk-high: #FF4D4D;
-  --risk-med: #FFC107;
-  --risk-low: #4ADE80;
-  --risk-high-bg: rgba(255, 77, 77, 0.2);
-  --risk-med-bg: rgba(255, 193, 7, 0.2);
-  --risk-low-bg: rgba(74, 222, 128, 0.2);
-
-  --radius-sm: 0px;
-  --radius-md: 0px;
-
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Roboto Mono', monospace;
+  --bg-dark: #05070a;
+  --bg-light: #1a202c;
+  --chrome-white: #ffffff;
+  --chrome-mid: #aebfd4;
+  --chrome-shadow: #1e2633;
+  --accent-blue: #60a5fa;
+  --glass-border: rgba(255, 255, 255, 0.15);
+  --glass-highlight: rgba(255, 255, 255, 0.4);
+  --glass-surface: rgba(20, 25, 35, 0.4);
+  --text-primary: #f0f4f8;
+  --text-secondary: #94a3b8;
+  
+  --radius-lg: 32px;
+  --radius-md: 24px;
+  --radius-sm: 16px;
+  
+  --font-main: 'SF Pro Display', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  outline: none;
 }
 
 body {
-  font-family: var(--font-family);
-  background-color: var(--surface-bg);
-  color: var(--text-main);
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  -webkit-font-smoothing: antialiased;
+  background-color: var(--bg-dark);
+  background-image: 
+      radial-gradient(circle at 50% 0%, #2d3748 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, #1a202c 0%, transparent 40%),
+      radial-gradient(circle at 10% 40%, #0f131a 0%, transparent 60%);
+  color: var(--text-primary);
+  font-family: var(--font-main);
+  min-height: 100vh;
+  margin: 0;
+  overflow-x: hidden;
 }
 
-#root {
-  height: 100%;
-  width: 100%;
-}
-
-.grid-pattern {
-  background-image:
-    linear-gradient(var(--border-light) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border-light) 1px, transparent 1px);
-  background-size: 80px 80px;
-  background-position: -1px -1px;
-}
-
-.text-caps {
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+.chrome-text {
+  background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 40%, #94a3b8 50%, #e2e8f0 60%, #ffffff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 10px rgba(255, 255, 255, 0.1);
   font-weight: 700;
-  font-size: 0.75rem;
+  letter-spacing: -0.02em;
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 24px;
-  height: 48px;
-  border-radius: var(--radius-sm);
-  font-weight: 700;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: all 0.1s ease;
-  border: 2px solid transparent;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  gap: 8px;
-}
-
-.btn-primary {
-  background-color: #FFFFFF;
-  color: var(--brand-blue);
-  border-color: #FFFFFF;
-}
-
-.btn-primary:hover {
-  background-color: transparent;
-  color: #FFFFFF;
-}
-
-.btn-secondary {
-  background-color: transparent;
-  border: 2px solid var(--border-light);
-  color: #FFFFFF;
-}
-
-.btn-secondary:hover {
-  border-color: #FFFFFF;
-  background: rgba(255,255,255,0.1);
-}
-
-.btn-reject {
-  background-color: transparent;
-  border: 2px solid var(--risk-high);
-  color: var(--risk-high);
-}
-
-.btn-reject:hover {
-  background-color: var(--risk-high);
-  color: white;
-}
-
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: var(--brand-blue);
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.3);
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #FFFFFF;
-}
-
-@keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-@media (max-width: 1024px) {
-  .data-grid { grid-template-columns: repeat(2, 1fr); }
-  .list-panel { width: 320px; }
-  h2 { font-size: 2rem; }
+.glass-panel {
+  background: var(--glass-surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-top: 1px solid var(--glass-highlight);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
 }

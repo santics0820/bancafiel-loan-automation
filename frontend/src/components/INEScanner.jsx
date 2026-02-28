@@ -39,12 +39,12 @@ const INEScanner = ({ onCapture, onBack }) => {
     const screenshot = webcamRef.current.getScreenshot();
     const guide      = isCardMode ? GUIDE.card : GUIDE.face;
 
-    const img   = new Image();
-    img.onload  = () => {
-      const imgW  = img.naturalWidth;
-      const imgH  = img.naturalHeight;
+    const img  = new Image();
+    img.onload = () => {
+      const imgW = img.naturalWidth;
+      const imgH = img.naturalHeight;
 
-      // Clamp al tamaño real del frame para evitar sy/sx negativos
+      // Clamp al tamaño real del frame para evitar sx/sy negativos
       let cropW = imgW * guide.widthPct;
       let cropH = cropW / guide.ratio;
       if (cropH > imgH) { cropH = imgH; cropW = cropH * guide.ratio; }
@@ -68,6 +68,7 @@ const INEScanner = ({ onCapture, onBack }) => {
     setCapturedImg(null);
     if (mode === 'card-front')     setMode('card-back');
     else if (mode === 'card-back') setMode('face');
+    // en 'face' no cambiamos modo — ClientPortal cierra el scanner
   };
 
   const retake = () => setCapturedImg(null);
@@ -75,7 +76,7 @@ const INEScanner = ({ onCapture, onBack }) => {
   return (
     <div className="ine-scanner">
 
-      {/* Header: ← volver  |  step indicators */}
+      {/* Header: ← volver | step indicators */}
       <div className="ine-steps">
         <button className="ine-back-btn" onClick={onBack}>← Volver</button>
         <div className="ine-steps-track">
@@ -114,7 +115,7 @@ const INEScanner = ({ onCapture, onBack }) => {
               <span>{INSTRUCTIONS[mode].hint}</span>
             </p>
             <div className="ine-actions-buttons">
-              <button className="btn btn-primary" onClick={capture}>
+              <button className="ine-btn-primary" onClick={capture}>
                 Tomar foto
               </button>
             </div>
@@ -127,10 +128,10 @@ const INEScanner = ({ onCapture, onBack }) => {
           </div>
           <div className="ine-actions">
             <div className="ine-actions-buttons">
-              <button className="btn btn-primary" onClick={confirm}>
+              <button className="ine-btn-primary" onClick={confirm}>
                 Confirmar foto
               </button>
-              <button className="btn btn-reject" onClick={retake}>
+              <button className="ine-btn-reject" onClick={retake}>
                 Volver a tomar
               </button>
             </div>

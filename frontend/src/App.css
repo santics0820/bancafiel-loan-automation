@@ -1,7 +1,14 @@
-.app-view {
-  display: none;
-  height: 100%;
+/* Eliminado estilos antiguos para forzar el uso de index.css y componentes Liquid Glass */
+#root {
   width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-view {
+  flex: 1;
+  display: none;
 }
 
 .app-view.active {
