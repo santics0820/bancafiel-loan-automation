@@ -1,0 +1,3 @@
+# Lambda-specific dependencies (in addition to Layer)
+# Most dependencies come from the Lambda Layer
+# Add any function-specific dependencies here if needed

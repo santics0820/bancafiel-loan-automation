@@ -1,0 +1,2 @@
+# Lambda-specific dependencies
+# Most dependencies come from the Lambda Layer
