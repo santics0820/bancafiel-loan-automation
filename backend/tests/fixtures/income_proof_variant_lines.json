@@ -1,0 +1,10 @@
+[
+  { "text": "Razon social", "confidence": 97.0 },
+  { "text": "ACME SA DE CV", "confidence": 96.0 },
+  { "text": "RFC XAXX010101000", "confidence": 95.0 },
+  { "text": "Periodo", "confidence": 94.0 },
+  { "text": "01-02-2026 al 07-02-2026", "confidence": 93.0 },
+  { "text": "Pago semanal", "confidence": 92.0 },
+  { "text": "Sueldo neto $1.234,00", "confidence": 91.0 },
+  { "text": "Percepciones $2,000.00", "confidence": 90.0 }
+]
