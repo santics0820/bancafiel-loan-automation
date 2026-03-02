@@ -4,9 +4,17 @@ import Logo from './Logo'
 import INEScanner from './INEScanner'
 import CardSwap, { Card } from './CardSwap'
 import CreditCard from './CreditCard'
+import { API_URL } from '../config'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const STEPS = ['upload', 'rfc', 'income', 'credit']
+
+const incomeRangeToNumber = (range) => ({
+  '5-15':  10000,
+  '15-30': 22500,
+  '30-50': 40000,
+  '50+':   60000,
+}[range] ?? 0)
 
 function StepDots({ step }) {
   const idx = STEPS.indexOf(step)
@@ -84,18 +92,74 @@ function getCardTier(amount) {
 
 // ── Component ──────────────────────────────────────────────────────────────
 function ClientPortal({ active }) {
-  const [step,        setStep]        = useState('landing')
-  const [uploadedFile, setUploadedFile] = useState(null)
-  const [isDragging,   setIsDragging]   = useState(false)
-  const [rfc,          setRfc]          = useState('')
-  const [incomeType,   setIncomeType]   = useState(null)
-  const [incomeRange,  setIncomeRange]  = useState(null)
-  const [creditLine,   setCreditLine]   = useState(0)
+  const [step,          setStep]          = useState('landing')
+  const [uploadedFile,  setUploadedFile]  = useState(null)
+  const [isDragging,    setIsDragging]    = useState(false)
+  const [rfc,           setRfc]           = useState('')
+  const [email,         setEmail]         = useState('')
+  const [incomeType,    setIncomeType]    = useState(null)
+  const [incomeRange,   setIncomeRange]   = useState(null)
+  const [creditLine,    setCreditLine]    = useState(0)
+  const [capturedName,  setCapturedName]  = useState('')
+  const [capturedINEFile, setCapturedINEFile] = useState(null)
+  const [applicationId, setApplicationId] = useState(null)
+  const [submitError,   setSubmitError]   = useState(null)
   const fileInputRef = useRef(null)
 
-  // KYC capture (INEScanner only calls this)
-  const handleCapture = (image, mode) => {
-    if (mode === 'face') setStep('complete')
+  // KYC capture — store name + INE image blob
+  const handleCapture = (image, mode, name) => {
+    if (mode === 'face') {
+      if (name) setCapturedName(name)
+      if (image) setCapturedINEFile(image)
+      setStep('complete')
+    }
+  }
+
+  const handleActivar = async () => {
+    setSubmitError(null)
+    setStep('loading')
+    try {
+      // 1. Create the loan application
+      const res = await fetch(`${API_URL}/api/loans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicantName:  capturedName || rfc,
+          applicantEmail: email,
+          loanAmount:     creditLine,
+          applicationType: 'CREDIT_CARD',
+          monthlyIncome:  incomeRangeToNumber(incomeRange),
+          existingDebt:   0,
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+
+      // 2. Upload INE scan to S3 if URL provided
+      if (capturedINEFile && data.uploadUrls?.ine) {
+        await fetch(data.uploadUrls.ine.url, {
+          method: 'PUT',
+          body: capturedINEFile,
+          headers: { 'Content-Type': 'application/pdf' },
+        })
+      }
+
+      // 3. Upload proof of address to S3 if URL provided
+      if (uploadedFile && data.uploadUrls?.proof_of_address) {
+        await fetch(data.uploadUrls.proof_of_address.url, {
+          method: 'PUT',
+          body: uploadedFile,
+          headers: { 'Content-Type': uploadedFile.type },
+        })
+      }
+
+      setApplicationId(data.applicationId)
+      setStep('confirmed')
+    } catch (err) {
+      console.error(err)
+      setSubmitError('Algo salió mal. Intenta de nuevo.')
+      setStep('credit')
+    }
   }
 
   // Auto-advance: KYC complete → upload
@@ -275,9 +339,19 @@ function ClientPortal({ active }) {
             <span className="rfc-hint">{rfc.length} / 12–13 caracteres</span>
           </div>
 
+          <div className="rfc-field" style={{ marginTop: '12px' }}>
+            <input
+              className="rfc-input"
+              type="email"
+              placeholder="correo@ejemplo.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
           <button className="liquid-btn kyc-cta"
-            disabled={rfc.length < 12}
-            style={{ opacity: rfc.length >= 12 ? 1 : 0.35, cursor: rfc.length >= 12 ? 'pointer' : 'not-allowed' }}
+            disabled={rfc.length < 12 || !email.includes('@')}
+            style={{ opacity: (rfc.length >= 12 && email.includes('@')) ? 1 : 0.35, cursor: (rfc.length >= 12 && email.includes('@')) ? 'pointer' : 'not-allowed' }}
             onClick={() => setStep('income')}
           >
             Continuar →
@@ -361,9 +435,53 @@ function ClientPortal({ active }) {
             </div>
           </div>
 
-          <button className="liquid-btn kyc-cta">
+          {submitError && (
+            <p style={{ color: 'var(--error, #f87171)', fontSize: '13px', textAlign: 'center', marginTop: '8px' }}>
+              {submitError}
+            </p>
+          )}
+
+          <button className="liquid-btn kyc-cta" onClick={handleActivar}>
             Activar mi tarjeta →
           </button>
+        </div>
+      )}
+
+      {/* ── LOADING ── */}
+      {step === 'loading' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="check-ring" style={{ opacity: 0.6 }}>
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="30" stroke="#60a5fa" strokeWidth="1.5" opacity="0.3"/>
+              <path d="M32 8 A24 24 0 0 1 56 32"
+                stroke="#60a5fa" strokeWidth="2.5"
+                strokeLinecap="round"
+                style={{ animation: 'spin 1s linear infinite', transformOrigin: '32px 32px' }}
+              />
+            </svg>
+          </div>
+          <p className="complete-label">Enviando solicitud…</p>
+        </div>
+      )}
+
+      {/* ── CONFIRMED ── */}
+      {step === 'confirmed' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="check-ring">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="30" stroke="#6ee7b7" strokeWidth="1.5" opacity="0.2"/>
+              <path className="check-path" d="M18 32 L27 41 L46 22"
+                stroke="#6ee7b7" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <p className="complete-label">¡Solicitud enviada!</p>
+          <p className="detail-id" style={{ fontFamily: 'monospace', fontSize: '18px', color: 'var(--text-primary)', marginTop: '8px' }}>
+            Folio: {applicationId?.slice(0, 8).toUpperCase()}
+          </p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '8px', textAlign: 'center' }}>
+            Te notificaremos a <strong>{email}</strong> en máximo 2 horas.
+          </p>
         </div>
       )}
 
