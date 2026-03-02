@@ -154,11 +154,13 @@ def get_fraud_data(event, context):
         blocked_rows = execute_query("""
             SELECT
                 a.id,
-                a.rejection_reason,
+                ah.notes AS rejection_reason,
                 fc.fraud_score,
                 fc.created_at
             FROM applications a
             JOIN fraud_checks fc ON a.id = fc.application_id
+            LEFT JOIN application_history ah
+                ON a.id = ah.application_id AND ah.action = 'REJECTED'
             WHERE a.status = 'REJECTED' AND a.fraud_risk_level = 'HIGH'
             ORDER BY fc.created_at DESC
             LIMIT 5
