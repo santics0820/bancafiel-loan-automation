@@ -551,6 +551,21 @@ Resources:
             Path: /api/loans
             Method: POST
 
+  GetFraudDataFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-getFraudData-${Environment}
+      CodeUri: src/api/routes/
+      Handler: fraud.get_fraud_data
+      Description: GET /api/fraud - Fraud detection dashboard data
+      Events:
+        GetFraud:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/fraud
+            Method: GET
+
   HealthCheckFunction:
     Type: AWS::Serverless::Function
     Properties:
