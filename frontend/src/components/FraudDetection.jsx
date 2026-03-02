@@ -1,120 +1,70 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './FraudDetection.css'
-
-const fraudApplications = [
-  {
-    id: 'LN-2024-8815',
-    name: 'Sofia Martinez',
-    fraudScore: 8.7,
-    riskLevel: 'HIGH',
-    time: '1H AGO',
-    flags: ['Address Mismatch', 'Income Inconsistent', 'Document Quality Low'],
-    details: {
-      identityConfidence: 95.2,
-      documentAuthenticity: 78.5,
-      behaviorScore: 42.0,
-      ipReputation: 'SUSPICIOUS',
-      deviceFingerprint: 'NEW DEVICE',
-      velocityCheck: 'FAILED'
-    }
-  },
-  {
-    id: 'LN-2024-8810',
-    name: 'Pedro Ramirez',
-    fraudScore: 6.3,
-    riskLevel: 'MEDIUM',
-    time: '3H AGO',
-    flags: ['Multiple Applications', 'Synthetic Identity Indicators'],
-    details: {
-      identityConfidence: 89.5,
-      documentAuthenticity: 85.2,
-      behaviorScore: 55.0,
-      ipReputation: 'MODERATE',
-      deviceFingerprint: 'KNOWN DEVICE',
-      velocityCheck: 'WARNING'
-    }
-  },
-  {
-    id: 'LN-2024-8805',
-    name: 'Carlos Hernandez',
-    fraudScore: 12.4,
-    riskLevel: 'CRITICAL',
-    time: '5H AGO',
-    flags: ['Forged Documents', 'Stolen Identity', 'Blacklist Match', 'IP Proxy Detected'],
-    details: {
-      identityConfidence: 45.8,
-      documentAuthenticity: 32.0,
-      behaviorScore: 15.0,
-      ipReputation: 'BLACKLISTED',
-      deviceFingerprint: 'SUSPICIOUS',
-      velocityCheck: 'CRITICAL'
-    }
-  },
-  {
-    id: 'LN-2024-8821',
-    name: 'Elena Rodriguez',
-    fraudScore: 1.2,
-    riskLevel: 'LOW',
-    time: '10M AGO',
-    flags: ['Minor Income Variance'],
-    details: {
-      identityConfidence: 99.8,
-      documentAuthenticity: 98.5,
-      behaviorScore: 92.0,
-      ipReputation: 'CLEAN',
-      deviceFingerprint: 'VERIFIED',
-      velocityCheck: 'PASSED'
-    }
-  },
-  {
-    id: 'LN-2024-8798',
-    name: 'Ana Torres',
-    fraudScore: 5.8,
-    riskLevel: 'MEDIUM',
-    time: '8H AGO',
-    flags: ['Employment Verification Pending', 'Unusual Transaction Pattern'],
-    details: {
-      identityConfidence: 92.0,
-      documentAuthenticity: 88.0,
-      behaviorScore: 68.0,
-      ipReputation: 'MODERATE',
-      deviceFingerprint: 'NEW DEVICE',
-      velocityCheck: 'WARNING'
-    }
-  }
-]
-
-const fraudStats = {
-  totalScanned: 147,
-  highRisk: 8,
-  mediumRisk: 23,
-  lowRisk: 116,
-  avgFraudScore: 2.1,
-  blocked: 5,
-  flaggedToday: 3
-}
-
-const fraudPatterns = [
-  { pattern: 'Document Forgery', detected: 12, trend: 'up' },
-  { pattern: 'Identity Theft', detected: 8, trend: 'down' },
-  { pattern: 'Income Fraud', detected: 18, trend: 'stable' },
-  { pattern: 'Synthetic Identity', detected: 5, trend: 'up' },
-  { pattern: 'Address Fraud', detected: 14, trend: 'stable' }
-]
-
-const recentBlocked = [
-  { id: 'LN-2024-8803', reason: 'Forged Documents', time: '4h ago', score: 15.2 },
-  { id: 'LN-2024-8796', reason: 'Stolen Identity', time: '1d ago', score: 18.7 },
-  { id: 'LN-2024-8789', reason: 'Blacklist Match', time: '2d ago', score: 22.1 }
-]
+import { API_URL } from '../config'
 
 function FraudDetection({ active }) {
-  const [selectedApp, setSelectedApp] = useState(fraudApplications[0])
-  const [filterLevel, setFilterLevel] = useState('ALL')
+  const [fraudApplications, setFraudApplications] = useState([])
+  const [fraudStats,        setFraudStats]        = useState(null)
+  const [fraudPatterns,     setFraudPatterns]     = useState([])
+  const [recentBlocked,     setRecentBlocked]     = useState([])
+  const [selectedApp,       setSelectedApp]       = useState(null)
+  const [filterLevel,       setFilterLevel]       = useState('ALL')
+  const [loading,           setLoading]           = useState(true)
+  const [error,             setError]             = useState(null)
+
+  useEffect(() => {
+    if (!active) return
+    setLoading(true)
+    setError(null)
+    fetch(`${API_URL}/api/fraud`)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
+      .then(data => {
+        setFraudApplications(data.flaggedApplications || [])
+        setFraudStats(data.stats || null)
+        setFraudPatterns(data.patterns || [])
+        setRecentBlocked(data.recentBlocked || [])
+        if (data.flaggedApplications?.length > 0) {
+          setSelectedApp(data.flaggedApplications[0])
+        }
+      })
+      .catch(err => {
+        console.error('Error fetching fraud data:', err)
+        setError('No se pudo cargar la información de fraude.')
+      })
+      .finally(() => setLoading(false))
+  }, [active])
 
   const filteredApps = filterLevel === 'ALL'
     ? fraudApplications
     : fraudApplications.filter(app => app.riskLevel === filterLevel)
+
+  if (loading) {
+    return (
+      <div className={`fraud-detection-view ${active ? 'active' : ''}`}>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          Cargando datos de fraude…
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className={`fraud-detection-view ${active ? 'active' : ''}`}>
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--error, #f87171)' }}>
+          {error}
+        </div>
+      </div>
+    )
+  }
+
+  const stats = fraudStats || {
+    totalScanned: 0, highRisk: 0, mediumRisk: 0, lowRisk: 0,
+    avgFraudScore: 0, blocked: 0, flaggedToday: 0,
+  }
 
   return (
     <div className={`fraud-detection-view ${active ? 'active' : ''}`}>
@@ -147,7 +97,7 @@ function FraudDetection({ active }) {
             </svg>
           </div>
           <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.highRisk}</div>
+            <div className="fraud-stat-value">{stats.highRisk}</div>
             <div className="fraud-stat-label">High Risk</div>
           </div>
         </div>
@@ -158,7 +108,7 @@ function FraudDetection({ active }) {
             </svg>
           </div>
           <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.mediumRisk}</div>
+            <div className="fraud-stat-value">{stats.mediumRisk}</div>
             <div className="fraud-stat-label">Medium Risk</div>
           </div>
         </div>
@@ -169,7 +119,7 @@ function FraudDetection({ active }) {
             </svg>
           </div>
           <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.lowRisk}</div>
+            <div className="fraud-stat-value">{stats.lowRisk}</div>
             <div className="fraud-stat-label">Low Risk</div>
           </div>
         </div>
@@ -181,7 +131,7 @@ function FraudDetection({ active }) {
             </svg>
           </div>
           <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.blocked}</div>
+            <div className="fraud-stat-value">{stats.blocked}</div>
             <div className="fraud-stat-label">Blocked</div>
           </div>
         </div>
@@ -194,7 +144,7 @@ function FraudDetection({ active }) {
             </svg>
           </div>
           <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.avgFraudScore}%</div>
+            <div className="fraud-stat-value">{stats.avgFraudScore}%</div>
             <div className="fraud-stat-label">Avg Score</div>
           </div>
         </div>
@@ -207,7 +157,7 @@ function FraudDetection({ active }) {
             </svg>
           </div>
           <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.flaggedToday}</div>
+            <div className="fraud-stat-value">{stats.flaggedToday}</div>
             <div className="fraud-stat-label">Flagged Today</div>
           </div>
         </div>
@@ -232,128 +182,140 @@ function FraudDetection({ active }) {
             </div>
           </div>
           <div className="fraud-list">
-            {filteredApps.map(app => (
-              <div
-                key={app.id}
-                className={`fraud-list-item ${selectedApp.id === app.id ? 'selected' : ''} ${app.riskLevel.toLowerCase()}`}
-                onClick={() => setSelectedApp(app)}
-              >
-                <div className="fraud-item-header">
-                  <span className="fraud-item-id">#{app.id}</span>
-                  <span className={`fraud-risk-badge ${app.riskLevel.toLowerCase()}`}>
-                    {app.riskLevel}
-                  </span>
-                </div>
-                <div className="fraud-item-name">{app.name}</div>
-                <div className="fraud-item-score">
-                  <span className="fraud-score-label">Fraud Score:</span>
-                  <span className="fraud-score-value">{app.fraudScore}%</span>
-                </div>
-                <div className="fraud-item-time">{app.time}</div>
+            {filteredApps.length === 0 ? (
+              <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                Sin solicitudes en este nivel de riesgo.
               </div>
-            ))}
+            ) : (
+              filteredApps.map(app => (
+                <div
+                  key={app.id}
+                  className={`fraud-list-item ${selectedApp?.id === app.id ? 'selected' : ''} ${app.riskLevel.toLowerCase()}`}
+                  onClick={() => setSelectedApp(app)}
+                >
+                  <div className="fraud-item-header">
+                    <span className="fraud-item-id">#{app.id}</span>
+                    <span className={`fraud-risk-badge ${app.riskLevel.toLowerCase()}`}>
+                      {app.riskLevel}
+                    </span>
+                  </div>
+                  <div className="fraud-item-name">{app.name}</div>
+                  <div className="fraud-item-score">
+                    <span className="fraud-score-label">Fraud Score:</span>
+                    <span className="fraud-score-value">{app.fraudScore}%</span>
+                  </div>
+                  <div className="fraud-item-time">{app.time}</div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
         {/* Center Panel - Detailed Analysis */}
-        <div className="fraud-detail-panel">
-          <div className="fraud-detail-header">
-            <div>
-              <h2 className="fraud-detail-name">{selectedApp.name}</h2>
-              <p className="fraud-detail-id">#{selectedApp.id}</p>
-            </div>
-            <div className={`fraud-score-display ${selectedApp.riskLevel.toLowerCase()}`}>
-              <div className="fraud-score-label-large">Fraud Score</div>
-              <div className="fraud-score-value-large">{selectedApp.fraudScore}%</div>
-              <div className={`fraud-risk-level ${selectedApp.riskLevel.toLowerCase()}`}>
-                {selectedApp.riskLevel} RISK
+        {selectedApp ? (
+          <div className="fraud-detail-panel">
+            <div className="fraud-detail-header">
+              <div>
+                <h2 className="fraud-detail-name">{selectedApp.name}</h2>
+                <p className="fraud-detail-id">#{selectedApp.id}</p>
               </div>
+              <div className={`fraud-score-display ${selectedApp.riskLevel.toLowerCase()}`}>
+                <div className="fraud-score-label-large">Fraud Score</div>
+                <div className="fraud-score-value-large">{selectedApp.fraudScore}%</div>
+                <div className={`fraud-risk-level ${selectedApp.riskLevel.toLowerCase()}`}>
+                  {selectedApp.riskLevel} RISK
+                </div>
+              </div>
+            </div>
+
+            <div className="fraud-flags-section">
+              <h3 className="fraud-section-title">Detection Flags</h3>
+              <div className="fraud-flags-grid">
+                {selectedApp.flags.map((flag, index) => (
+                  <div key={index} className="fraud-flag">
+                    <span className="fraud-flag-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                        <line x1="12" y1="9" x2="12" y2="13"/>
+                        <line x1="12" y1="17" x2="12.01" y2="17"/>
+                      </svg>
+                    </span>
+                    {flag}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="fraud-analysis-section">
+              <h3 className="fraud-section-title">Detailed Analysis</h3>
+              <div className="fraud-metrics-grid">
+                <div className="fraud-metric">
+                  <div className="fraud-metric-label">Identity Confidence</div>
+                  <div className="fraud-metric-bar-container">
+                    <div
+                      className={`fraud-metric-bar ${selectedApp.details.identityConfidence > 90 ? 'safe' : selectedApp.details.identityConfidence > 70 ? 'warning' : 'critical'}`}
+                      style={{ width: `${selectedApp.details.identityConfidence}%` }}
+                    ></div>
+                  </div>
+                  <div className="fraud-metric-value">{selectedApp.details.identityConfidence}%</div>
+                </div>
+
+                <div className="fraud-metric">
+                  <div className="fraud-metric-label">Document Authenticity</div>
+                  <div className="fraud-metric-bar-container">
+                    <div
+                      className={`fraud-metric-bar ${selectedApp.details.documentAuthenticity > 90 ? 'safe' : selectedApp.details.documentAuthenticity > 70 ? 'warning' : 'critical'}`}
+                      style={{ width: `${selectedApp.details.documentAuthenticity}%` }}
+                    ></div>
+                  </div>
+                  <div className="fraud-metric-value">{selectedApp.details.documentAuthenticity}%</div>
+                </div>
+
+                <div className="fraud-metric">
+                  <div className="fraud-metric-label">Behavior Score</div>
+                  <div className="fraud-metric-bar-container">
+                    <div
+                      className={`fraud-metric-bar ${selectedApp.details.behaviorScore > 80 ? 'safe' : selectedApp.details.behaviorScore > 50 ? 'warning' : 'critical'}`}
+                      style={{ width: `${selectedApp.details.behaviorScore}%` }}
+                    ></div>
+                  </div>
+                  <div className="fraud-metric-value">{selectedApp.details.behaviorScore}%</div>
+                </div>
+              </div>
+
+              <div className="fraud-checks-grid">
+                <div className="fraud-check">
+                  <div className="fraud-check-label">IP Reputation</div>
+                  <div className={`fraud-check-value ${selectedApp.details.ipReputation === 'CLEAN' ? 'safe' : selectedApp.details.ipReputation === 'MODERATE' ? 'warning' : 'critical'}`}>
+                    {selectedApp.details.ipReputation}
+                  </div>
+                </div>
+                <div className="fraud-check">
+                  <div className="fraud-check-label">Device Fingerprint</div>
+                  <div className={`fraud-check-value ${selectedApp.details.deviceFingerprint === 'VERIFIED' ? 'safe' : selectedApp.details.deviceFingerprint === 'KNOWN DEVICE' ? 'warning' : 'critical'}`}>
+                    {selectedApp.details.deviceFingerprint}
+                  </div>
+                </div>
+                <div className="fraud-check">
+                  <div className="fraud-check-label">Velocity Check</div>
+                  <div className={`fraud-check-value ${selectedApp.details.velocityCheck === 'PASSED' ? 'safe' : selectedApp.details.velocityCheck === 'WARNING' ? 'warning' : 'critical'}`}>
+                    {selectedApp.details.velocityCheck}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="fraud-actions">
+              <button className="btn btn-reject">Block Application</button>
+              <button className="btn btn-secondary">Request Verification</button>
+              <button className="btn btn-primary">Mark as Reviewed</button>
             </div>
           </div>
-
-          <div className="fraud-flags-section">
-            <h3 className="fraud-section-title">Detection Flags</h3>
-            <div className="fraud-flags-grid">
-              {selectedApp.flags.map((flag, index) => (
-                <div key={index} className="fraud-flag">
-                  <span className="fraud-flag-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                      <line x1="12" y1="9" x2="12" y2="13"/>
-                      <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                  </span>
-                  {flag}
-                </div>
-              ))}
-            </div>
+        ) : (
+          <div className="fraud-detail-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>
+            Selecciona una solicitud para ver el análisis.
           </div>
-
-          <div className="fraud-analysis-section">
-            <h3 className="fraud-section-title">Detailed Analysis</h3>
-            <div className="fraud-metrics-grid">
-              <div className="fraud-metric">
-                <div className="fraud-metric-label">Identity Confidence</div>
-                <div className="fraud-metric-bar-container">
-                  <div
-                    className={`fraud-metric-bar ${selectedApp.details.identityConfidence > 90 ? 'safe' : selectedApp.details.identityConfidence > 70 ? 'warning' : 'critical'}`}
-                    style={{ width: `${selectedApp.details.identityConfidence}%` }}
-                  ></div>
-                </div>
-                <div className="fraud-metric-value">{selectedApp.details.identityConfidence}%</div>
-              </div>
-
-              <div className="fraud-metric">
-                <div className="fraud-metric-label">Document Authenticity</div>
-                <div className="fraud-metric-bar-container">
-                  <div
-                    className={`fraud-metric-bar ${selectedApp.details.documentAuthenticity > 90 ? 'safe' : selectedApp.details.documentAuthenticity > 70 ? 'warning' : 'critical'}`}
-                    style={{ width: `${selectedApp.details.documentAuthenticity}%` }}
-                  ></div>
-                </div>
-                <div className="fraud-metric-value">{selectedApp.details.documentAuthenticity}%</div>
-              </div>
-
-              <div className="fraud-metric">
-                <div className="fraud-metric-label">Behavior Score</div>
-                <div className="fraud-metric-bar-container">
-                  <div
-                    className={`fraud-metric-bar ${selectedApp.details.behaviorScore > 80 ? 'safe' : selectedApp.details.behaviorScore > 50 ? 'warning' : 'critical'}`}
-                    style={{ width: `${selectedApp.details.behaviorScore}%` }}
-                  ></div>
-                </div>
-                <div className="fraud-metric-value">{selectedApp.details.behaviorScore}%</div>
-              </div>
-            </div>
-
-            <div className="fraud-checks-grid">
-              <div className="fraud-check">
-                <div className="fraud-check-label">IP Reputation</div>
-                <div className={`fraud-check-value ${selectedApp.details.ipReputation === 'CLEAN' ? 'safe' : selectedApp.details.ipReputation === 'MODERATE' ? 'warning' : 'critical'}`}>
-                  {selectedApp.details.ipReputation}
-                </div>
-              </div>
-              <div className="fraud-check">
-                <div className="fraud-check-label">Device Fingerprint</div>
-                <div className={`fraud-check-value ${selectedApp.details.deviceFingerprint === 'VERIFIED' ? 'safe' : selectedApp.details.deviceFingerprint === 'KNOWN DEVICE' ? 'warning' : 'critical'}`}>
-                  {selectedApp.details.deviceFingerprint}
-                </div>
-              </div>
-              <div className="fraud-check">
-                <div className="fraud-check-label">Velocity Check</div>
-                <div className={`fraud-check-value ${selectedApp.details.velocityCheck === 'PASSED' ? 'safe' : selectedApp.details.velocityCheck === 'WARNING' ? 'warning' : 'critical'}`}>
-                  {selectedApp.details.velocityCheck}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="fraud-actions">
-            <button className="btn btn-reject">Block Application</button>
-            <button className="btn btn-secondary">Request Verification</button>
-            <button className="btn btn-primary">Mark as Reviewed</button>
-          </div>
-        </div>
+        )}
 
         {/* Right Panel - Patterns & Recent */}
         <div className="fraud-side-panel">
