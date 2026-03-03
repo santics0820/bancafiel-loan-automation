@@ -34,7 +34,7 @@ def set_env(monkeypatch):
     monkeypatch.setenv("INCOMING_BUCKET", "bancafiel-incoming-466901690437-test")
     monkeypatch.setenv("PROCESSED_BUCKET", "bancafiel-processed-466901690437-test")
     monkeypatch.setenv("REJECTED_BUCKET", "bancafiel-rejected-466901690437-test")
-    # Add Lambda-specific env vars as needed (TEXTRACT_SNS_TOPIC_ARN, etc.)
+    # Add Lambda-specific env vars as needed (BEDROCK_MODEL_ID, etc.)
 ```
 
 ## DB mocking pattern

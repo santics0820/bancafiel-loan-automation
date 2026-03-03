@@ -27,13 +27,13 @@ Pre-deploy security checklist for BancaFiel. Run before every `sam deploy`.
 - [ ] No `s3:*` wildcard actions — only specific actions (`s3:GetObject`, `s3:PutObject`)
 - [ ] No `Resource: '*'` on S3 policies — use `!Sub "arn:aws:s3:::bancafiel-incoming-${AWS::AccountId}-${Environment}/*"`
 - [ ] Lambda cross-invocation policies use specific function ARNs, not wildcards
-- [ ] Only `textract:*` and `frauddetector:*` use `Resource: '*'` (AWS-required for those services)
+- [ ] Only `bedrock:InvokeModel` and `frauddetector:*` use `Resource: '*'` (AWS-required for those services)
 
 ### 5. Error Handling
 - [ ] No raw exception messages returned in API responses
 - [ ] 500 responses return only `{"error": "Internal server error"}` — no tracebacks
 - [ ] All handlers have top-level `try/except Exception as e: logger.error(...)` blocks
-- [ ] Lambda timeouts are reasonable (30s default, 60s for Textract/Fraud lambdas)
+- [ ] Lambda timeouts are reasonable (30s default, 120s for Bedrock/Fraud lambdas)
 
 ### 6. API Security
 - [ ] CORS `AllowOrigin: '*'` is acceptable for dev — confirm this is NOT prod

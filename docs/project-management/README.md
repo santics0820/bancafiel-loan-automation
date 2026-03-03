@@ -43,7 +43,7 @@ Week 1: Setup & Requirements
 - Day 5: Architecture finalization, dev environment setup
 
 Week 2: Development Sprint 1
-- Backend: Lambda functions, RDS setup, Textract integration
+- Backend: Lambda functions, RDS setup, Bedrock OCR integration (Claude Sonnet 4.5)
 - Frontend: React setup, dashboard skeleton, Cognito auth
 - BA: ROI analysis finalized
 - PM: Daily standups, track progress
@@ -73,8 +73,8 @@ Week 4: Testing, Refinement & Presentation
 # Daily Standup - February 15, 2026
 
 ## Backend Developer
-- **Yesterday:** Created document processor Lambda, tested Textract locally
-- **Today:** Integrate Textract with S3, start fraud detector Lambda
+- **Yesterday:** Created document processor Lambda, tested Bedrock OCR locally
+- **Today:** Integrate Bedrock OCR with S3, start fraud detector Lambda
 - **Blockers:** Need AWS Fraud Detector enabled on account
 
 ## Frontend Developer

@@ -31,7 +31,7 @@ Automated loan processing system for BancaFiel using AWS services to reduce proc
 ## 🏗️ Architecture
 
 ### AWS Services Used
-- **AWS Textract** - Document OCR (INE, proof of income)
+- **Claude Sonnet 4.5 on Bedrock** - Document OCR (INE, proof of income)
 - **AWS Lambda** - Serverless compute (Python 3.11)
 - **Amazon RDS** - PostgreSQL database
 - **AWS Step Functions** - Workflow orchestration

@@ -39,7 +39,7 @@ def list_applications(event, context):
                 c.full_name AS applicant_name,
                 c.email AS applicant_email
             FROM applications a
-            JOIN customers c ON a.customer_id = c.id
+            LEFT JOIN customers c ON a.customer_id = c.id
             WHERE a.status = %s
             ORDER BY a.requested_date DESC
             LIMIT 100
@@ -76,7 +76,7 @@ def get_application(event, context):
 
         app = execute_query_single("""
             SELECT a.*, c.full_name, c.email, c.curp, c.phone, c.address
-            FROM applications a JOIN customers c ON a.customer_id = c.id
+            FROM applications a LEFT JOIN customers c ON a.customer_id = c.id
             WHERE a.id = %s
         """, (application_id,))
 

@@ -17,7 +17,7 @@ Backend services for BancaFiel loan automation using AWS serverless architecture
 - **Amazon RDS** - PostgreSQL database
 - **AWS Step Functions** - Loan workflow orchestration
 - **Amazon S3** - Document storage
-- **AWS Textract** - OCR for INE and income documents
+- **Amazon Bedrock (Claude Sonnet 4.5)** - OCR for INE and income documents
 - **AWS Fraud Detector** - Fraud risk analysis
 - **API Gateway** - REST API endpoints
 - **Amazon SES** - Email notifications
@@ -31,7 +31,7 @@ Backend services for BancaFiel loan automation using AWS serverless architecture
 backend/
 ├── src/
 │   ├── lambdas/                    # Lambda functions
-│   │   ├── document-processor/     # Textract OCR lambda
+│   │   ├── document-processor/     # Bedrock OCR lambda (Claude Sonnet 4.5)
 │   │   ├── fraud-detector/         # Fraud detection lambda
 │   │   ├── credit-scorer/          # Credit scoring lambda
 │   │   └── notification-sender/    # SES notification lambda
@@ -152,7 +152,7 @@ psql bancafiel_loans < migrations/20260215_add_fraud_score.sql
 ## 📦 Lambda Functions
 
 ### 1. Document Processor (`document-processor/`)
-**Purpose:** Extract text from uploaded INE and income documents using Textract
+**Purpose:** Extract text from uploaded INE and income documents using Claude Sonnet 4.5 on Amazon Bedrock
 
 **Input:**
 ```json
@@ -234,7 +234,7 @@ Start
   ↓
 Document Upload to S3
   ↓
-Document Processor Lambda (Textract)
+Document Processor Lambda (Bedrock - Claude Sonnet 4.5)
   ↓
 Fraud Detector Lambda
   ↓
@@ -280,7 +280,7 @@ End
 - application_id (FK)
 - document_type
 - s3_url
-- textract_data (JSONB)
+- bedrock_extracted_data (JSONB)
 - uploaded_at
 
 **fraud_scores**
@@ -333,7 +333,7 @@ aws lambda update-function-code \
 ## 🔐 Security
 
 ### IAM Roles Required
-- Lambda execution role (access to S3, RDS, Textract, Fraud Detector, SES)
+- Lambda execution role (access to S3, RDS, Bedrock, Fraud Detector, SES)
 - RDS security group (allow Lambda access)
 - S3 bucket policies (encrypted at rest)
 
@@ -378,7 +378,7 @@ Solution: Increase timeout in CloudFormation template or AWS console
 Solution: Check Lambda is in same VPC as RDS, security groups allow connection
 ```
 
-**Textract throttling**
+**Bedrock rate limiting**
 ```
 Solution: Implement exponential backoff retry logic
 ```
@@ -389,7 +389,7 @@ Solution: Implement exponential backoff retry logic
 
 - [AWS Lambda Python](https://docs.aws.amazon.com/lambda/latest/dg/lambda-python.html)
 - [AWS Step Functions](https://docs.aws.amazon.com/step-functions/latest/dg/welcome.html)
-- [AWS Textract](https://docs.aws.amazon.com/textract/)
+- [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/)
 - [PostgreSQL on RDS](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_PostgreSQL.html)
 
 ---

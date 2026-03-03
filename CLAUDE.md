@@ -25,9 +25,9 @@ SAM is installed at `/Users/santiagocairesanchez/Library/Python/3.13/bin/sam` vi
 
 ```
 S3 upload (incoming bucket)
-  └─► [1] processDocument  — starts Textract job, saves document metadata to DB
-        └─► SNS: bancafiel-textract-done-{env}
-              └─► [2] extractData  — gets Textract results, structures fields, saves to DB
+  └─► [1] processDocument  — downloads doc from S3, runs OCR via Claude Sonnet 4.5 (Bedrock), saves to DB
+        └─► async invoke (Bedrock extraction complete)
+              └─► [2] extractData  — verifies Bedrock extraction, triggers validateData
                     └─► async invoke
                           └─► [3] validateData  — validates fields, links customer by CURP
                                 └─► async invoke

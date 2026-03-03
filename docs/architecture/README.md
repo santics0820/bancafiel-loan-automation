@@ -40,7 +40,7 @@ API Gateway
     ↓
 Lambda Functions (Document Processor, Fraud Detector, Credit Scorer)
     ↓
-RDS PostgreSQL + S3 Storage + AWS Textract + Fraud Detector
+RDS PostgreSQL + S3 Storage + Claude Sonnet 4.5 on Bedrock + Fraud Detector
     ↓
 Step Functions (Orchestration)
     ↓

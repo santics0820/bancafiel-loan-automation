@@ -91,9 +91,9 @@ CREATE TABLE IF NOT EXISTS documents (
     file_size_bytes BIGINT,
     mime_type VARCHAR(100),
 
-    -- Textract
-    textract_job_id VARCHAR(255),
-    textract_status VARCHAR(20) CHECK (textract_status IN ('PENDING', 'IN_PROGRESS', 'SUCCEEDED', 'FAILED')),
+    -- Bedrock OCR (columns retain original names for backward compatibility)
+    textract_job_id VARCHAR(255),        -- stores Bedrock job reference: bedrock-{app_id}-{doc_type}
+    textract_status VARCHAR(20) CHECK (textract_status IN ('PENDING', 'IN_PROGRESS', 'SUCCEEDED', 'FAILED')),  -- reflects Bedrock extraction status
 
     -- Timestamps
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -294,8 +294,8 @@ GRANT SELECT ON pending_applications_view TO analytics_readonly;
 
 COMMENT ON TABLE customers IS 'Customer master data - Mexican banking customers';
 COMMENT ON TABLE applications IS 'Loan and credit card applications with full workflow tracking';
-COMMENT ON TABLE documents IS 'Document storage references (S3) and Textract processing status';
-COMMENT ON TABLE extracted_data IS 'Data extracted from documents via Amazon Textract';
+COMMENT ON TABLE documents IS 'Document storage references (S3) and Bedrock OCR processing status';
+COMMENT ON TABLE extracted_data IS 'Data extracted from documents via Claude Sonnet 4.5 on Amazon Bedrock';
 COMMENT ON TABLE application_history IS 'Complete audit trail of all application state changes';
 COMMENT ON TABLE fraud_checks IS 'Fraud detection results from AWS Fraud Detector';
 COMMENT ON TABLE approval_tokens IS 'Step Functions task tokens for human approval workflow';

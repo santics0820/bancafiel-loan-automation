@@ -224,9 +224,9 @@ Now let's see what happens with our AWS solution:
 **Step 2: Automatic Document Processing (0:00-0:02 - 2 minutes)**
 - **What happens:**
   - AWS Lambda function #1 (`processDocument`) receives S3 upload notification
-  - Lambda calls Amazon Textract API
-  - Textract uses AI to read the PDF/images and extract text
-  - Textract identifies: Name, address, ID number, date of birth automatically
+  - Lambda calls Claude Sonnet 4.5 on Amazon Bedrock API
+  - Bedrock OCR (Claude Sonnet 4.5) uses AI to read the PDF/images and extract text
+  - Bedrock OCR (Claude Sonnet 4.5) identifies: Name, address, ID number, date of birth automatically
   - Returns structured JSON data (not plain text)
 - **Example output:**
 ```json
@@ -390,7 +390,7 @@ Gracias por confiar en BancaFiel.
 | Activity | Current (Manual) | AWS (Automated) | Time Saved |
 |----------|------------------|-----------------|------------|
 | Document download | 5 min (manual) | Instant (S3) | 5 min |
-| Data extraction | 10 min (manual typing) | 30 sec (Textract AI) | 9.5 min |
+| Data extraction | 10 min (manual typing) | 30 sec (Bedrock OCR (Claude Sonnet 4.5) AI) | 9.5 min |
 | Data validation | 30 min (manual search) | 10 sec (RDS query) | 29.5 min |
 | Fraud check | None (manual errors) | 10 sec (Fraud Detector) | Prevents fraud |
 | Routing to approver | 1-3 days (email wait) | Instant (Step Functions) | 1-3 days |
@@ -509,7 +509,7 @@ bancafiel-documents/
 - **Reliable:** Files never get lost (unlike email attachments)
 - **Scalable:** Can store millions of documents
 - **Cheap:** $0.023/GB/month (thousands of PDFs cost pennies)
-- **Automatic triggers:** When file uploaded → automatically triggers Textract
+- **Automatic triggers:** When file uploaded → automatically triggers Bedrock OCR (Claude Sonnet 4.5)
 
 ---
 
@@ -522,8 +522,8 @@ bancafiel-documents/
 
 **Our Lambda functions:**
 
-1. **`processDocument`** - Receives uploaded file, sends to Textract
-2. **`extractData`** - Receives Textract results, parses JSON
+1. **`processDocument`** - Receives uploaded file, sends to Bedrock OCR (Claude Sonnet 4.5)
+2. **`extractData`** - Receives Bedrock OCR (Claude Sonnet 4.5) results, parses JSON
 3. **`validateData`** - Queries RDS database to validate customer info
 4. **`detectFraud`** - Sends data to Fraud Detector, gets risk score
 5. **`routeToApprover`** - Decides which approver gets the application
@@ -543,8 +543,8 @@ def processDocument(event):
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = event['Records'][0]['s3']['object']['key']
 
-    # Call Textract to extract data
-    response = textract.detect_document_text(
+    # Call Bedrock OCR (Claude Sonnet 4.5) to extract data
+    response = bedrock_client.invoke_model  # Claude Sonnet 4.5(
         Document={'S3Object': {'Bucket': bucket, 'Name': key}}
     )
 
@@ -554,7 +554,7 @@ def processDocument(event):
 
 ---
 
-#### **Component 5: Amazon Textract (AI Document Reader)**
+#### **Component 5: Claude Sonnet 4.5 on Amazon Bedrock (AI Document Reader)**
 
 **What it is:**
 - AI service that reads text from images and PDFs
@@ -662,7 +662,7 @@ CREATE TABLE documents (
 ```
 START
   ↓
-[Extract Data with Textract]
+[Extract Data with Bedrock OCR (Claude Sonnet 4.5)]
   ↓
 [Validate Data with RDS]
   ↓
@@ -869,7 +869,7 @@ Let's trace one application through the entire system:
 → Lambda #1 → S3 bucket → Triggers Lambda #2
 
 **T+0:02 - AI extracts data**
-→ Lambda #2 → Textract API → Returns JSON → Triggers Lambda #3
+→ Lambda #2 → Bedrock OCR (Claude Sonnet 4.5) API → Returns JSON → Triggers Lambda #3
 
 **T+0:03 - Data validated**
 → Lambda #3 → RDS query → Customer exists → Triggers Lambda #4
@@ -906,26 +906,26 @@ This section explains our decision-making: why we chose AWS, and why each specif
 
 **Option 1: Low-Code Tools (N8N, Zapier, Make, Airtable)**
 - ❌ **Not scalable:** Can handle 100 apps/day, not 500
-- ❌ **Limited AI:** No document extraction like Textract
+- ❌ **Limited AI:** No document extraction like Bedrock OCR (Claude Sonnet 4.5)
 - ❌ **Expensive at scale:** Per-transaction pricing adds up
 - ❌ **Not professional:** KPMG won't be impressed
 - ✅ **Easy to build:** Good for prototypes, not production
 
 **Option 2: Google Cloud Platform**
-- ✅ **Has document AI:** Similar to Textract
+- ✅ **Has document AI:** Similar to Bedrock OCR (Claude Sonnet 4.5)
 - ❌ **Less mature fraud detection:** No equivalent to Fraud Detector
 - ❌ **More complex:** Harder to learn for beginners
 - ✅ **Good option:** But we know AWS better
 
 **Option 3: Microsoft Azure**
-- ✅ **Has Form Recognizer:** Similar to Textract
+- ✅ **Has Form Recognizer:** Similar to Bedrock OCR (Claude Sonnet 4.5)
 - ❌ **Enterprise focus:** Geared toward large corporations
 - ❌ **Steeper learning curve:** More complex for students
 - ✅ **Good option:** But we know AWS better
 
 **Option 4: AWS (our choice)**
 - ✅ **Industry standard:** 32% market share, most jobs require AWS
-- ✅ **Best AI services:** Textract, Fraud Detector are industry-leading
+- ✅ **Best AI services:** Bedrock OCR (Claude Sonnet 4.5), Fraud Detector are industry-leading
 - ✅ **Free tier:** Can build entire demo for free
 - ✅ **Documentation:** Best tutorials, community support
 - ✅ **Student credits:** AWS Educate gives $100/year free
@@ -937,7 +937,7 @@ This section explains our decision-making: why we chose AWS, and why each specif
 
 ---
 
-### 4.2 Why Amazon Textract (instead of manual OCR or open-source)?
+### 4.2 Why Claude Sonnet 4.5 on Amazon Bedrock (instead of manual OCR or open-source)?
 
 **Problem:** Need to extract text from INE/IFE, proof of address, bank statements
 
@@ -954,7 +954,7 @@ This section explains our decision-making: why we chose AWS, and why each specif
 - ❌ **Handwriting:** Can't read handwritten INE
 - ❌ **Maintenance:** We'd have to train/tune the model
 
-**Option 3: Amazon Textract (our choice)**
+**Option 3: Claude Sonnet 4.5 on Amazon Bedrock (our choice)**
 - ✅ **High accuracy:** 95-99% on real documents
 - ✅ **Structured output:** Returns JSON with field labels
 - ✅ **Handwriting:** Can read handwritten text on IDs
@@ -964,13 +964,13 @@ This section explains our decision-making: why we chose AWS, and why each specif
 - ✅ **Cost-effective:** $1.50 per 1,000 pages = $67.50/month for 45k pages
 - ❌ **Not free:** But worth the cost for accuracy
 
-**Decision: Textract is worth the cost because it replaces 10 min/application manual work with 30 seconds of AI work. At 500 apps/day, this saves 83 hours/day of staff time.**
+**Decision: Bedrock OCR (Claude Sonnet 4.5) is worth the cost because it replaces 10 min/application manual work with 30 seconds of AI work. At 500 apps/day, this saves 83 hours/day of staff time.**
 
 **ROI calculation:**
 - Cost: $67.50/month
 - Saves: 83 hours/day × 22 days = 1,826 hours/month
 - Staff cost saved: 1,826 hours × $3.50/hour = $6,391/month
-- **ROI: 9,450% monthly return on Textract investment**
+- **ROI: 9,450% monthly return on Bedrock OCR (Claude Sonnet 4.5) investment**
 
 ---
 
@@ -1293,7 +1293,7 @@ Monthly costs for 15,000 applications/month in production:
 
 | AWS Service | Purpose | Monthly Cost (USD) |
 |-------------|---------|-------------------|
-| **Amazon Textract** | Document extraction (45,000 pages) | $135 |
+| **Claude Sonnet 4.5 on Amazon Bedrock** | Document extraction (45,000 pages) | $135 |
 | **Amazon RDS** | Database (db.t3.small) | $36 |
 | **Amazon Fraud Detector** | Fraud prevention (batch mode) | $23 |
 | **AWS Lambda** | Compute (150,000 invocations) | $2 |
@@ -1480,7 +1480,7 @@ Our team will build this solution in 4 weeks (1 month):
 
 **Days 5-7: First Lambda Functions**
 - Write Lambda #1: `processDocument` (receives S3 upload)
-- Write Lambda #2: `extractData` (calls Textract)
+- Write Lambda #2: `extractData` (calls Bedrock OCR (Claude Sonnet 4.5))
 - Test document extraction with sample INE/IFE
 
 **Who does what:**
@@ -1494,14 +1494,14 @@ Our team will build this solution in 4 weeks (1 month):
 
 #### **Week 2: Intelligence (AI/ML Integration)**
 
-**Days 8-10: Textract Integration**
-- Fully integrate Amazon Textract API
+**Days 8-10: Bedrock OCR (Claude Sonnet 4.5) Integration**
+- Fully integrate Claude Sonnet 4.5 on Amazon Bedrock API
 - Parse JSON output into structured data
 - Handle different document formats (scanned vs. photos)
 - Test accuracy with 50+ sample documents
 
 **Who does what:**
-- Technical team member 1: Textract integration
+- Technical team member 1: Bedrock OCR (Claude Sonnet 4.5) integration
 - Technical team member 2: Data parsing logic
 - Non-technical team: Collect diverse sample documents, test accuracy
 
@@ -1642,7 +1642,7 @@ Our 5-person team will divide work as follows:
 
 ### 6.3 Risk Management
 
-**Risk 1: Textract accuracy too low for Mexican documents**
+**Risk 1: Bedrock OCR (Claude Sonnet 4.5) accuracy too low for Mexican documents**
 - **Mitigation:** Test with 100+ real Mexican INE/IFE during Week 2
 - **Backup:** Use manual verification step if accuracy < 90%
 
@@ -1719,7 +1719,7 @@ BancaFiel's manual loan processing system is costing **$381,000 USD per month** 
 
 **Development (Weeks 3-6):**
 1. Week 1: Foundation (AWS setup, React app, first Lambda)
-2. Week 2: Intelligence (Textract, fraud detection)
+2. Week 2: Intelligence (Bedrock OCR (Claude Sonnet 4.5), fraud detection)
 3. Week 3: Workflow (Step Functions, approval dashboard)
 4. Week 4: Polish and demo prep
 
@@ -1769,7 +1769,7 @@ Every month BancaFiel waits costs:
 
 **For technical team:**
 - AWS Lambda Tutorial: https://aws.amazon.com/lambda/getting-started/
-- Amazon Textract Tutorial: https://aws.amazon.com/textract/getting-started/
+- Claude Sonnet 4.5 on Amazon Bedrock Tutorial: https://aws.amazon.com/bedrock/getting-started/
 - Step Functions Workshop: https://catalog.workshops.aws/stepfunctions/
 - React Documentation: https://react.dev/learn
 

@@ -1,6 +1,7 @@
 """
 Unit tests for Lambda #1: document-processor
 (backend/src/lambdas/document-processor/handler.py)
+Uses Claude Sonnet 4.5 on Amazon Bedrock for OCR extraction.
 """
 import sys
 import os
@@ -43,44 +44,71 @@ def lambda_context():
     return ctx
 
 
-def test_handler_happy_path_starts_textract_and_saves_doc(lambda_context):
-    os.environ["TEXTRACT_SNS_TOPIC_ARN"] = "arn:aws:sns:us-east-1:123:textract"
-    os.environ["TEXTRACT_ROLE_ARN"] = "arn:aws:iam::123:role/textract"
+def _bedrock_response(fields):
+    """Build a mock Bedrock invoke_model response returning JSON fields."""
+    body_bytes = json.dumps(fields).encode()
+    mock_stream = MagicMock()
+    mock_stream.read.return_value = json.dumps({
+        "content": [{"type": "text", "text": json.dumps(fields)}]
+    }).encode()
+    return {"body": mock_stream}
+
+
+def test_handler_happy_path_calls_bedrock_and_saves_doc(lambda_context):
+    os.environ["VALIDATE_DATA_FUNCTION"] = "bancafiel-validateData-dev"
+    os.environ["BEDROCK_MODEL_ID"] = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 
     event = _s3_event("applications/app-001/ine.pdf", size=456)
 
-    mod.textract_client.start_document_text_detection.return_value = {"JobId": "job-123"}
+    mock_body = MagicMock()
+    mock_body.read.return_value = json.dumps({
+        "Records": [{"s3": {"bucket": {"name": "b"}, "object": {"key": "k", "size": 1}}}]
+    }).encode()
 
-    with patch.object(mod, "execute_insert") as mock_insert:
+    s3_get_response = {"Body": MagicMock()}
+    s3_get_response["Body"].read.return_value = b"fake-pdf-bytes"
+
+    bedrock_resp = {
+        "body": MagicMock()
+    }
+    bedrock_resp["body"].read.return_value = json.dumps({
+        "content": [{"type": "text", "text": json.dumps({
+            "full_name": "Juan Perez",
+            "curp": "PERJ850315HDFRN01"
+        })}]
+    }).encode()
+
+    mod.s3_client.get_object.return_value = s3_get_response
+    mod.bedrock_client.invoke_model.return_value = bedrock_resp
+
+    with patch.object(mod, "execute_insert", return_value=[{"id": "doc-001"}]) as mock_insert, \
+         patch.object(mod, "save_extracted_data") as mock_save:
+        mod.lambda_client = MagicMock()
         result = mod.handler(event, lambda_context)
 
     assert result["statusCode"] == 200
-
-    mod.textract_client.start_document_text_detection.assert_called_once()
-
+    assert mod.bedrock_client.invoke_model.called
     assert mock_insert.called
-    _, params = mock_insert.call_args[0]
-    assert params[0] == "app-001"
-    assert params[1] == "INE"
+
+    # First call is the INSERT — check its params
+    first_call_args = mock_insert.call_args_list[0][0]
+    _, params = first_call_args
+    assert params[0] == "app-001"   # application_id
+    assert params[1] == "INE"       # document_type
     assert params[2] == "incoming-bucket"
     assert params[3] == "applications/app-001/ine.pdf"
-    assert params[4] == 456
-    assert params[5] == "job-123"
-    assert params[6] == "IN_PROGRESS"
+    assert params[4] == 456         # file_size
 
 
-def test_handler_invalid_key_skips_textract_and_db(lambda_context):
+def test_handler_invalid_key_skips_bedrock_and_db(lambda_context):
     event = _s3_event("badfile.pdf")
-    mod.textract_client.start_document_text_detection.reset_mock()
+    mod.bedrock_client.invoke_model.reset_mock()
 
     with patch.object(mod, "execute_insert") as mock_insert:
         result = mod.handler(event, lambda_context)
 
     assert result["statusCode"] == 200
-    body = json.loads(result["body"])
-    assert body["job_id"] is None
-
-    assert not mod.textract_client.start_document_text_detection.called
+    assert not mod.bedrock_client.invoke_model.called
     assert not mock_insert.called
 
 
@@ -88,14 +116,17 @@ def test_determine_document_type_defaults_income():
     assert mod.determine_document_type("applications/app-001/unknown.pdf") == "INCOME_PROOF"
 
 
-def test_handler_textract_failure_still_inserts_pending(lambda_context):
-    os.environ["TEXTRACT_SNS_TOPIC_ARN"] = "arn:aws:sns:us-east-1:123:textract"
-    os.environ["TEXTRACT_ROLE_ARN"] = "arn:aws:iam::123:role/textract"
+def test_handler_bedrock_failure_still_inserts_pending(lambda_context):
+    os.environ["VALIDATE_DATA_FUNCTION"] = "bancafiel-validateData-dev"
 
     event = _s3_event("applications/app-009/bank.pdf", size=999)
-    mod.textract_client.start_document_text_detection.side_effect = Exception("boom")
 
-    with patch.object(mod, "execute_insert") as mock_insert:
+    s3_get_response = {"Body": MagicMock()}
+    s3_get_response["Body"].read.return_value = b"fake-pdf-bytes"
+    mod.s3_client.get_object.return_value = s3_get_response
+    mod.bedrock_client.invoke_model.side_effect = Exception("bedrock unavailable")
+
+    with patch.object(mod, "execute_insert", return_value=[{"id": "doc-009"}]) as mock_insert:
         result = mod.handler(event, lambda_context)
 
     assert result["statusCode"] == 200
@@ -103,8 +134,9 @@ def test_handler_textract_failure_still_inserts_pending(lambda_context):
     _, params = mock_insert.call_args[0]
     assert params[0] == "app-009"
     assert params[1] == "BANK_STATEMENT"
-    assert params[5] is None
-    assert params[6] == "PENDING"
+    assert params[6] == "FAILED"   # status when Bedrock fails
+
+    mod.bedrock_client.invoke_model.side_effect = None
 
 
 def test_determine_document_type_variants():
@@ -115,11 +147,19 @@ def test_determine_document_type_variants():
 
 
 def test_handler_database_insert_failure_returns_200(lambda_context):
-    os.environ["TEXTRACT_SNS_TOPIC_ARN"] = "arn:aws:sns:us-east-1:123:textract"
-    os.environ["TEXTRACT_ROLE_ARN"] = "arn:aws:iam::123:role/textract"
+    os.environ["VALIDATE_DATA_FUNCTION"] = "bancafiel-validateData-dev"
 
     event = _s3_event("applications/app-010/ine.pdf", size=321)
-    mod.textract_client.start_document_text_detection.return_value = {"JobId": "job-999"}
+
+    s3_get_response = {"Body": MagicMock()}
+    s3_get_response["Body"].read.return_value = b"fake-pdf-bytes"
+    mod.s3_client.get_object.return_value = s3_get_response
+
+    bedrock_resp = {"body": MagicMock()}
+    bedrock_resp["body"].read.return_value = json.dumps({
+        "content": [{"type": "text", "text": json.dumps({"full_name": "Test"})}]
+    }).encode()
+    mod.bedrock_client.invoke_model.return_value = bedrock_resp
 
     with patch.object(mod, "execute_insert", side_effect=Exception("db down")):
         result = mod.handler(event, lambda_context)
@@ -130,3 +170,22 @@ def test_handler_database_insert_failure_returns_200(lambda_context):
 def test_handler_exception_returns_500(lambda_context):
     result = mod.handler({}, lambda_context)
     assert result["statusCode"] == 500
+
+
+def test_extract_with_bedrock_parses_json_response():
+    bedrock_resp = {"body": MagicMock()}
+    bedrock_resp["body"].read.return_value = json.dumps({
+        "content": [{"type": "text", "text": json.dumps({
+            "full_name": "Maria Lopez",
+            "curp": "LOPM900101MDFPXX01",
+            "date_of_birth": "01/01/1990"
+        })}]
+    }).encode()
+    mod.bedrock_client.invoke_model.return_value = bedrock_resp
+
+    import base64
+    fields = mod.extract_with_bedrock(base64.b64encode(b"fake").decode(), "INE")
+
+    assert fields["full_name"]["value"] == "Maria Lopez"
+    assert fields["curp"]["value"] == "LOPM900101MDFPXX01"
+    assert fields["full_name"]["confidence"] == 99.0
