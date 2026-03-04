@@ -141,6 +141,117 @@
   margin: 0;
 }
 
+/* ===== KYC Notice screen ===== */
+.kyc-notice-card { gap: 20px; }
+
+.kyc-notice-icons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+
+.kyc-notice-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-blue, #60a5fa);
+}
+
+.kyc-notice-plus {
+  font-size: 1.2rem;
+  color: rgba(255, 255, 255, 0.2);
+  font-weight: 300;
+}
+
+.kyc-notice-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.kyc-notice-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+}
+
+.kyc-notice-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  color: #60a5fa;
+  font-size: 0.72rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ===== Auth screen ===== */
+.auth-tab-toggle {
+  display: flex;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 100px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 9px 0;
+  border-radius: 100px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-family: var(--font-main);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.auth-tab.active {
+  background: rgba(96, 165, 250, 0.15);
+  color: var(--text-primary);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+}
+
+.auth-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.auth-back-link {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-family: var(--font-main);
+  cursor: pointer;
+  padding: 0;
+  margin-top: -8px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.auth-back-link:hover { opacity: 1; }
+
 /* ===== CTA button ===== */
 .kyc-cta { width: 100%; margin-top: 4px !important; }
 
@@ -428,4 +539,76 @@
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 0.04em;
+}
+
+/* ===== Mobile responsive ===== */
+@media (max-width: 640px) {
+  .client-view {
+    align-items: flex-start;
+    height: auto;
+    min-height: 100vh;
+    padding: 16px;
+    padding-bottom: 32px;
+  }
+
+  /* Landing: stack columns */
+  .kyc-landing-split {
+    grid-template-columns: 1fr;
+    gap: 32px;
+    padding: 32px 24px;
+    width: 100%;
+  }
+
+  .kyc-landing-left {
+    align-items: center;
+    text-align: center;
+  }
+
+  .kyc-landing-left .kyc-intro {
+    text-align: center;
+  }
+
+  .kyc-landing-left .kyc-intro h1 {
+    font-size: 1.7rem;
+  }
+
+  /* Hide card stack on small screens to save space */
+  .kyc-landing-right {
+    display: none;
+  }
+
+  /* Cards */
+  .kyc-card {
+    width: 100%;
+    padding: 28px 20px;
+  }
+
+  .kyc-complete-card {
+    padding: 40px 20px;
+  }
+
+  /* Scanner */
+  .portal-card.scanner-mode {
+    width: 100%;
+  }
+
+  /* Credit amount */
+  .credit-amount {
+    font-size: 2.4rem;
+  }
+
+  /* Income grid — keep 2 cols but tighten */
+  .income-types {
+    gap: 6px;
+  }
+
+  .income-type-card {
+    padding: 12px 6px;
+  }
+
+  /* RFC input */
+  .rfc-input {
+    font-size: 1.1rem;
+    padding: 14px 16px;
+  }
 }
