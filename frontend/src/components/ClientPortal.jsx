@@ -4,6 +4,7 @@ import Logo from './Logo'
 import INEScanner from './INEScanner'
 import CardSwap, { Card } from './CardSwap'
 import CreditCard from './CreditCard'
+import LiquidDashboard from './LiquidDashboard'
 import { API_URL } from '../config'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -266,6 +267,30 @@ function ClientPortal({ active }) {
   }
 
   if (!active) return null
+
+  // Shared computed values — used by card-reveal and approved dashboard
+  const revealName   = capturedName || trackingData?.applicantName || trackingData?.applicant_name || trackingData?.name || ''
+  const revealAmount = creditLine || trackingData?.loanAmount || trackingData?.loan_amount || trackingData?.credit_line || 0
+  const revealTier   = getCardTier(revealAmount)
+  const cardLastFour = applicationId ? applicationId.replace(/-/g, '').slice(-4).toUpperCase() : '••••'
+  const cardExpiry   = (() => {
+    const d = new Date()
+    d.setFullYear(d.getFullYear() + 3)
+    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`
+  })()
+
+  if (step === 'approved') {
+    return (
+      <LiquidDashboard
+        active={true}
+        userName={revealName}
+        creditLine={revealAmount}
+        cardTier={revealTier}
+        cardLastFour={cardLastFour}
+        cardExpiry={cardExpiry}
+      />
+    )
+  }
 
   const tier = getCardTier(creditLine)
 
@@ -799,12 +824,51 @@ function ClientPortal({ active }) {
               ))}
             </div>
 
+            {steps.every(s => s.status === 'done') && (
+              <button className="liquid-btn kyc-cta card-reveal-trigger" onClick={() => setStep('card-reveal')}>
+                Comienza ahora
+              </button>
+            )}
+
             <button className="auth-back-link" onClick={() => setStep('confirmed')}>
               ← Volver
             </button>
           </div>
         )
       })()}
+
+      {/* ── CARD REVEAL ANIMATION ── */}
+      {step === 'card-reveal' && (() => {
+        const cardType = revealTier.cls === 'tier-gold' ? 'gold-dark' : revealTier.cls === 'tier-classic' ? 'blue-dark' : 'gray-dark'
+        return (
+          <div className="card-reveal-scene">
+            <div className="card-reveal-glow" />
+
+            <div className="card-reveal-card-wrap">
+              <div style={{ width: '300px', height: '190px' }}>
+                <CreditCard
+                  type={cardType}
+                  tier={revealTier.label.replace('BANCAFIEL ', '')}
+                  number="•••• •••• •••• ••••"
+                  expiry={cardExpiry}
+                  holder={revealName.toUpperCase()}
+                />
+              </div>
+            </div>
+
+            <div className="card-reveal-info">
+              <div className="card-reveal-limit-block">
+                <span className="card-reveal-limit-label">Línea de crédito aprobada</span>
+                <span className="card-reveal-limit">${Math.round(parseFloat(revealAmount)).toLocaleString('en-US')}</span>
+                <button className="card-reveal-continue" onClick={() => setStep('approved')}>
+                  ¡Bienvenido a BANCAFIEL!
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
 
     </div>
   )

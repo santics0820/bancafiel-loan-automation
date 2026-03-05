@@ -1,176 +1,276 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './LiquidDashboard.css';
+import CreditCard from './CreditCard';
 
-const LiquidDashboard = ({ active }) => {
+const NAV_ITEMS = [
+  {
+    id: 'overview', label: 'Inicio',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'card', label: 'Mi Tarjeta',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'transfers', label: 'Transferir',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'history', label: 'Historial',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="12 8 12 12 14 14"/>
+        <path d="M3.05 11a9 9 0 1 0 .5-4.5"/><polyline points="3 3 3.05 7 7.05 7"/>
+      </svg>
+    ),
+  },
+];
+
+const TRANSACTIONS = [
+  { id: 1, name: 'Liverpool',        cat: 'Compras',         date: 'Hoy 10:24',  amount: -1299, color: '#60a5fa' },
+  { id: 2, name: 'Depósito Nómina',  cat: 'Ingreso',         date: 'Ayer',        amount: +4250, color: '#6ee7b7' },
+  { id: 3, name: 'Netflix',          cat: 'Entretenimiento', date: 'Oct 24',      amount: -219,  color: '#a78bfa' },
+  { id: 4, name: 'Starbucks',        cat: 'Restaurantes',    date: 'Oct 23',      amount: -85,   color: '#fb923c' },
+  { id: 5, name: 'OXXO',            cat: 'Conveniencia',    date: 'Oct 22',      amount: -14,   color: '#94a3b8' },
+];
+
+const LiquidDashboard = ({
+  active,
+  userName     = '',
+  creditLine   = 0,
+  cardTier     = { label: 'BANCAFIEL BÁSICA', cls: 'tier-basic' },
+  cardLastFour = '••••',
+  cardExpiry   = '12/28',
+}) => {
+  const [activeNav,    setActiveNav]    = useState('overview');
+  const [ringAnimated, setRingAnimated] = useState(false);
+
+  useEffect(() => {
+    if (active) {
+      const t = setTimeout(() => setRingAnimated(true), 500);
+      return () => clearTimeout(t);
+    }
+  }, [active]);
+
   if (!active) return null;
 
+  const amount       = Math.round(parseFloat(creditLine));
+  const usedAmount   = 0;
+  const availableAmt = amount - usedAmount;
+  const usedPct      = amount > 0 ? (usedAmount / amount) * 100 : 0;
+  const availPct     = 100 - usedPct;
+
+  const firstName   = userName ? userName.split(' ')[0] : 'Cliente';
+  const displayName = userName ? userName.toUpperCase() : 'CLIENTE';
+  const tierLabel   = cardTier.label.replace('BANCAFIEL ', '');
+  const cardType    = cardTier.cls === 'tier-gold'    ? 'gold-dark'
+                    : cardTier.cls === 'tier-classic' ? 'blue-dark'
+                    : 'gray-dark';
+
+  const cardGlow = cardTier.cls === 'tier-gold'    ? 'rgba(251,191,36,0.25)'
+                 : cardTier.cls === 'tier-classic' ? 'rgba(96,165,250,0.25)'
+                 : 'rgba(148,163,184,0.12)';
+
+  // SVG ring
+  const R    = 48;
+  const SW   = 6;
+  const r    = R - SW / 2;
+  const circ = 2 * Math.PI * r;
+  const ringOffset = ringAnimated ? circ - (availPct / 100) * circ : circ;
+
+  const now      = new Date();
+  const cutoff   = new Date(now.getFullYear(), now.getMonth() + 1, 25);
+  const cutoffFmt = cutoff.toLocaleDateString('es-MX', { day: 'numeric', month: 'long' });
+
   return (
-    <div className="liquid-banking-root">
-      <div className="ambient-light"></div>
-      <div className="ambient-reflection"></div>
+    <div className="lbd-root">
+      <div className="lbd-shell">
 
-      <div className="dashboard-container">
-          
-          <nav className="nav-rail glass-panel">
-              <div className="nav-item active">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="7" height="7" rx="2"></rect>
-                      <rect x="14" y="3" width="7" height="7" rx="2"></rect>
-                      <rect x="14" y="14" width="7" height="7" rx="2"></rect>
-                      <rect x="3" y="14" width="7" height="7" rx="2"></rect>
-                  </svg>
-              </div>
-              <div className="nav-item">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 12V7H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-                      <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
-                      <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
-                  </svg>
-              </div>
-              <div className="nav-item">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                  </svg>
-              </div>
-              <div className="nav-item" style={{ marginTop: 'auto' }}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-              </div>
-          </nav>
+        {/* ── NAV ── */}
+        <nav className="lbd-nav glass-panel">
+          <div className="lbd-nav-logo">
+            <div className="logo-orb" style={{ width: 28, height: 28 }} />
+          </div>
 
-          <header className="header-area">
-              <div className="logo-mark chrome-text">
-                  <div className="logo-orb"></div>
-                  AETHER BANK
+          <div className="lbd-nav-items">
+            {NAV_ITEMS.map(n => (
+              <button
+                key={n.id}
+                className={`lbd-nav-btn ${activeNav === n.id ? 'lbd-nav-btn--active' : ''}`}
+                onClick={() => setActiveNav(n.id)}
+                title={n.label}
+              >
+                {n.icon}
+              </button>
+            ))}
+          </div>
+
+          <div className="lbd-nav-avatar">
+            {firstName[0]?.toUpperCase()}
+          </div>
+        </nav>
+
+        {/* ── CONTENT ── */}
+        <div className="lbd-content">
+
+          {/* Header */}
+          <header className="lbd-header">
+            <div className="lbd-header-left">
+              <div className="logo-mark chrome-text" style={{ fontSize: '20px' }}>
+                BANCAFIEL
               </div>
-              <div className="user-pill">
-                  <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Private Client</span>
-                  <div className="avatar"></div>
-              </div>
+            </div>
+            <div className="user-pill">
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{displayName}</span>
+              <div className="avatar" />
+            </div>
           </header>
 
-          <main className="main-content">
-              
-              <section className="glass-panel hero-card">
-                  <div>
-                      <div className="balance-label">Total Asset Value</div>
-                      <div className="balance-amount chrome-text">
-                          <span className="currency">$</span>124,592.40
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                           <span style={{ color: '#6ee7b7', fontSize: '14px', background: 'rgba(110,231,183,0.1)', padding: '4px 8px', borderRadius: '4px' }}>+2.4%</span>
-                           <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>vs last month</span>
-                      </div>
-                  </div>
+          {/* Body grid — 2×2 */}
+          <div className="lbd-body">
 
-                  <div className="chart-container">
-                      <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 800 120">
-                          <defs>
-                              <linearGradient id="liquidGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                  <stop offset="0%" style={{ stopColor: '#94a3b8', stopOpacity: 0.4 }}></stop>
-                                  <stop offset="50%" style={{ stopColor: '#ffffff', stopOpacity: 1 }}></stop>
-                                  <stop offset="100%" style={{ stopColor: '#94a3b8', stopOpacity: 0.4 }}></stop>
-                              </linearGradient>
-                              <linearGradient id="fillGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                                  <stop offset="0%" style={{ stopColor: '#ffffff', stopOpacity: 0.5 }}></stop>
-                                  <stop offset="100%" style={{ stopColor: '#ffffff', stopOpacity: 0 }}></stop>
-                              </linearGradient>
-                          </defs>
-                          <path className="chart-fill" d="M0,80 C150,80 200,30 350,50 C500,70 600,10 800,40 V120 H0 Z"></path>
-                          <path className="chart-line" d="M0,80 C150,80 200,30 350,50 C500,70 600,10 800,40"></path>
-                      </svg>
+            {/* TOP-LEFT: Hero / Credit */}
+            <section className="glass-panel lbd-hero" style={{ '--delay': '0.05s' }}>
+              <div className="lbd-hero-inner">
+                <div className="lbd-hero-left">
+                  <p className="lbd-label">CRÉDITO DISPONIBLE</p>
+                  <div className="lbd-big-number chrome-text">
+                    <span className="lbd-big-currency">$</span>
+                    {availableAmt.toLocaleString('en-US')}
                   </div>
-              </section>
+                  <span className={`credit-tier ${cardTier.cls}`} style={{ alignSelf: 'flex-start' }}>
+                    {tierLabel}
+                  </span>
 
-              <section className="glass-panel transactions-card">
-                  <div className="section-header">
-                      <div className="section-title">Latest Activity</div>
-                      <div style={{ color: 'var(--text-secondary)', fontSize: '13px', cursor: 'pointer' }}>View All</div>
+                  <div className="lbd-stats-row">
+                    <div className="lbd-stat">
+                      <span className="lbd-stat-label">Límite</span>
+                      <span className="lbd-stat-val">${amount.toLocaleString('en-US')}</span>
+                    </div>
+                    <div className="lbd-stat-div" />
+                    <div className="lbd-stat">
+                      <span className="lbd-stat-label">Utilizado</span>
+                      <span className="lbd-stat-val" style={{ color: '#f87171' }}>${usedAmount.toLocaleString('en-US')}</span>
+                    </div>
+                    <div className="lbd-stat-div" />
+                    <div className="lbd-stat">
+                      <span className="lbd-stat-label">Disponible</span>
+                      <span className="lbd-stat-val" style={{ color: '#6ee7b7' }}>${availableAmt.toLocaleString('en-US')}</span>
+                    </div>
                   </div>
-                  
-                  <div className="transaction-list">
-                      <div className="transaction-item">
-                          <div className="t-icon">
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-                          </div>
-                          <div className="t-info">
-                              <div className="t-name">Apple Store</div>
-                              <div className="t-date">Today, 10:24 AM</div>
-                          </div>
-                          <div className="t-amount negative">-$1,299.00</div>
-                      </div>
+                </div>
 
-                      <div className="transaction-item">
-                          <div className="t-icon">
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-                          </div>
-                          <div className="t-info">
-                              <div className="t-name">Salary Deposit</div>
-                              <div className="t-date">Yesterday</div>
-                          </div>
-                          <div className="t-amount positive">+$4,250.00</div>
-                      </div>
-
-                      <div className="transaction-item">
-                          <div className="t-icon">
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg>
-                          </div>
-                          <div className="t-info">
-                              <div className="t-name">Subscription</div>
-                              <div className="t-date">Oct 24</div>
-                          </div>
-                          <div className="t-amount negative">-$14.00</div>
-                      </div>
+                {/* Ring */}
+                <div className="lbd-ring-wrap">
+                  <svg width={R * 2} height={R * 2} viewBox={`0 0 ${R * 2} ${R * 2}`} style={{ overflow: 'visible' }}>
+                    <circle cx={R} cy={R} r={r} fill="none"
+                      stroke="rgba(255,255,255,0.08)" strokeWidth={SW} />
+                    <circle cx={R} cy={R} r={r} fill="none"
+                      stroke="rgba(255,255,255,0.88)" strokeWidth={SW}
+                      strokeLinecap="round"
+                      strokeDasharray={circ}
+                      strokeDashoffset={ringOffset}
+                      transform={`rotate(-90 ${R} ${R})`}
+                      style={{ transition: 'stroke-dashoffset 1.4s cubic-bezier(0.23,1,0.32,1)', filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.25))' }}
+                    />
+                  </svg>
+                  <div className="lbd-ring-center">
+                    <span className="lbd-ring-pct">{availPct.toFixed(0)}%</span>
+                    <span className="lbd-ring-sub">libre</span>
                   </div>
-              </section>
-          </main>
-
-          <aside className="sidebar-right">
-              
-              <div className="glass-panel card-visual">
-                  <div className="card-chip"></div>
-                  <div className="card-number">
-                      •••• •••• •••• 8842
-                  </div>
-                  <div className="card-details">
-                      <span>ALEX MORGAN</span>
-                      <span>12/26</span>
-                  </div>
+                </div>
               </div>
 
-              <div className="glass-panel transfer-panel">
-                  <div className="section-header">
-                      <div className="section-title" style={{ fontSize: '16px' }}>Quick Transfer</div>
-                  </div>
-                  <div className="contacts-grid">
-                      <div className="contact-bubble">
-                          <div className="contact-img" style={{ background: '#475569' }}></div>
-                          <div className="contact-name">Sarah</div>
-                      </div>
-                      <div className="contact-bubble">
-                          <div className="contact-img" style={{ background: '#52525b' }}></div>
-                          <div className="contact-name">Mike</div>
-                      </div>
-                      <div className="contact-bubble">
-                          <div className="contact-img" style={{ background: '#3f3f46' }}></div>
-                          <div className="contact-name">Anna</div>
-                      </div>
-                      <div className="contact-bubble">
-                          <div className="contact-img" style={{ background: '#27272a' }}></div>
-                          <div className="contact-name">Tom</div>
-                      </div>
-                      <div className="contact-bubble" style={{ border: '1px dashed rgba(255,255,255,0.3)' }}>
-                          <svg width="20" height="20" stroke="white" strokeWidth="2"><line x1="10" y1="4" x2="10" y2="16"></line><line x1="4" y1="10" x2="16" y2="10"></line></svg>
-                      </div>
-                  </div>
-                  <button className="liquid-btn">Send Money</button>
+              {/* Util bar */}
+              <div className="lbd-util-wrap">
+                <div className="lbd-util-track">
+                  <div className="lbd-util-fill" style={{ width: `${Math.max(usedPct, 0.3)}%` }} />
+                </div>
+                <div className="lbd-util-labels">
+                  <span>{usedPct.toFixed(0)}% utilizado</span>
+                  <span>{availPct.toFixed(0)}% disponible</span>
+                </div>
               </div>
-          </aside>
+            </section>
 
+            {/* TOP-RIGHT: Card standalone (no container) */}
+            <div className="lbd-card-standalone" style={{ '--delay': '0.09s', '--card-glow': cardGlow }}>
+              <div className="lbd-card-wrap" style={{ '--glow': cardGlow }}>
+                <CreditCard
+                  type={cardType}
+                  tier={tierLabel}
+                  number="•••• •••• •••• ••••"
+                  expiry={cardExpiry}
+                  holder={displayName}
+                />
+              </div>
+            </div>
+
+            {/* BOTTOM-LEFT: Transactions */}
+            <section className="glass-panel lbd-txn-panel" style={{ '--delay': '0.12s' }}>
+              <div className="lbd-panel-head">
+                <span className="lbd-panel-title">Movimientos Recientes</span>
+                <button className="auth-back-link" style={{ fontSize: '12px', marginTop: 0, opacity: 0.5 }}>
+                  Ver todos →
+                </button>
+              </div>
+              <div className="lbd-txn-list">
+                {TRANSACTIONS.map((t, i) => (
+                  <div key={t.id} className="lbd-txn" style={{ '--ti': i, '--cc': t.color }}>
+                    <div className="lbd-txn-dot" />
+                    <div className="lbd-txn-info">
+                      <span className="lbd-txn-name">{t.name}</span>
+                      <span className="lbd-txn-meta">
+                        <span style={{ color: t.color }}>{t.cat}</span>
+                        {' · '}{t.date}
+                      </span>
+                    </div>
+                    <span className={`lbd-txn-amt ${t.amount > 0 ? 'lbd-pos' : ''}`}>
+                      {t.amount > 0 ? '+' : ''}${Math.abs(t.amount).toLocaleString('en-US')}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* BOTTOM-RIGHT: Account */}
+            <div className="glass-panel lbd-account-panel" style={{ '--delay': '0.16s' }}>
+              <span className="lbd-panel-title" style={{ display: 'block', marginBottom: '18px' }}>
+                Estado de Cuenta
+              </span>
+              <div className="credit-details" style={{ marginBottom: '20px' }}>
+                {[
+                  { label: 'Saldo actual',       val: '$0.00',    hi: false },
+                  { label: 'Pago mínimo',         val: '$0.00',    hi: false },
+                  { label: 'Próximo corte',       val: cutoffFmt,  hi: false },
+                  { label: 'Sin intereses hasta', val: cutoffFmt,  hi: true  },
+                ].map(row => (
+                  <div key={row.label} className="credit-detail-row">
+                    <span>{row.label}</span>
+                    <span className="detail-val" style={row.hi ? { color: '#6ee7b7' } : {}}>
+                      {row.val}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <button className="liquid-btn">Realizar Pago</button>
+            </div>
+
+          </div>
+        </div>
       </div>
     </div>
   );

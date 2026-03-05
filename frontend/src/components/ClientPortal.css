@@ -655,6 +655,146 @@
   letter-spacing: 0.04em;
 }
 
+/* ===== "Meet your new card" button ===== */
+.card-reveal-trigger {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-weight: 700 !important;
+  box-shadow:
+    0 10px 24px -6px rgba(255, 255, 255, 0.2),
+    inset 0 2px 0 rgba(255, 255, 255, 0.8) !important;
+}
+.card-reveal-trigger:hover {
+  filter: brightness(0.96);
+}
+
+/* ===== Card Reveal cinematic screen ===== */
+.card-reveal-scene {
+  position: fixed;
+  inset: 0;
+  background: #05070a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  z-index: 200;
+  overflow: hidden;
+}
+
+/* ambient glow behind the card */
+.card-reveal-glow {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  translate: -50% -50%;
+  width: 560px;
+  height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(96, 165, 250, 0.14) 0%, transparent 70%);
+  animation: revealGlowPulse 2.6s ease-in-out infinite 1s;
+  pointer-events: none;
+}
+@keyframes revealGlowPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.12); }
+}
+
+/* Card slides in from the LEFT */
+.card-reveal-card-wrap {
+  opacity: 0;
+  transform: translateX(-100vw) scale(1.6);
+  filter: blur(4px);
+  animation: cardSlideFromLeft 1.3s cubic-bezier(0.23, 1, 0.32, 1) forwards 0.1s;
+  margin-bottom: 80px;
+}
+@keyframes cardSlideFromLeft {
+  0%   { opacity: 0; transform: translateX(-100vw) scale(1.6); filter: blur(4px); }
+  25%  { opacity: 1; }
+  75%  { filter: blur(0); }
+  100% { opacity: 1; transform: translateX(0)      scale(1.75); filter: blur(0); }
+}
+
+/* Info block: name, number, limit */
+.card-reveal-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  animation: revealFadeUp 0.65s cubic-bezier(0.16, 1, 0.3, 1) forwards 1s;
+}
+@keyframes revealFadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.card-reveal-name {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.14em;
+}
+
+.card-reveal-number {
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0.26em;
+}
+
+.card-reveal-limit-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.card-reveal-limit-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-secondary);
+  opacity: 0.55;
+}
+
+.card-reveal-limit {
+  font-size: 2.8rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #ffffff;
+  opacity: 0;
+  animation: glowCount 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards 1.25s;
+}
+@keyframes glowCount {
+  from { opacity: 0; transform: scale(0.75); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Small inline continue button */
+.card-reveal-continue {
+  margin-top: 4px;
+  padding: 9px 22px;
+  border-radius: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: var(--font-main);
+  cursor: pointer;
+  opacity: 0;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  animation: revealFadeUp 0.5s ease forwards 1.8s;
+}
+.card-reveal-continue:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
 /* ===== Mobile responsive ===== */
 @media (max-width: 640px) {
   .client-view {
