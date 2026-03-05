@@ -325,7 +325,10 @@ Resources:
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
-              Resource: !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+                - bedrock:Converse
+              Resource:
+                - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+                - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-validateData-${Environment}
@@ -374,11 +377,15 @@ Resources:
       Environment:
         Variables:
           DETECT_FRAUD_FUNCTION: !Sub bancafiel-detectFraud-${Environment}
+          SENDER_EMAIL: 'noreply@bancafiel.com'
       Policies:
         - Statement:
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-detectFraud-${Environment}
+            - Effect: Allow
+              Action: ses:SendEmail
+              Resource: '*'
 
   # ============================================
   # LAMBDA #4: detectFraud
@@ -392,6 +399,9 @@ Resources:
       Handler: handler.handler
       Description: Runs AWS Fraud Detector, scores risk, updates application
       Timeout: 60
+      Environment:
+        Variables:
+          LOAN_WORKFLOW_ARN: !Ref LoanWorkflow
       Policies:
         - Statement:
             - Effect: Allow
@@ -399,6 +409,10 @@ Resources:
                 - frauddetector:GetEventPrediction
                 - frauddetector:CreateEvent
               Resource: '*'
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:bancafiel-loan-workflow-${Environment}"
 
   # ============================================
   # LAMBDA #5: approvalNotifier
@@ -413,13 +427,17 @@ Resources:
       Description: Notifies approver via SNS, stores Step Functions task token
       Environment:
         Variables:
-          APPROVER_SNS_TOPIC_ARN: !Ref ApproverNotificationTopic
+          APPROVER_EMAIL: 'santics@outlook.com'
+          SENDER_EMAIL: 'noreply@bancafiel.com'
           FRONTEND_URL: 'https://bancafiel.com'
       Policies:
         - Statement:
             - Effect: Allow
-              Action: sns:Publish
-              Resource: !Ref ApproverNotificationTopic
+              Action: ses:SendEmail
+              Resource: '*'
+            - Effect: Allow
+              Action: states:SendTaskSuccess
+              Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:bancafiel-loan-workflow-${Environment}"
       Events:
         # Expose approval/reject via API Gateway
         ApproveApplication:

@@ -243,39 +243,44 @@ def extract_with_bedrock(document_b64, document_type):
     """
     prompt = EXTRACTION_PROMPTS.get(document_type, EXTRACTION_PROMPTS['INCOME_PROOF'])
 
-    body = {
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 1024,
-        "messages": [
+    document_bytes = base64.b64decode(document_b64)
+
+    # Detect file type by magic bytes
+    is_jpeg = document_bytes[:3] == b'\xff\xd8\xff'
+    is_png  = document_bytes[:8] == b'\x89PNG\r\n\x1a\n'
+
+    if is_jpeg or is_png:
+        img_format = 'jpeg' if is_jpeg else 'png'
+        media_block = {
+            "image": {
+                "format": img_format,
+                "source": {"bytes": document_bytes}
+            }
+        }
+    else:
+        media_block = {
+            "document": {
+                "format": "pdf",
+                "name": "document",
+                "source": {"bytes": document_bytes}
+            }
+        }
+
+    response = bedrock_client.converse(
+        modelId=BEDROCK_MODEL_ID,
+        messages=[
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": "application/pdf",
-                            "data": document_b64
-                        }
-                    },
-                    {
-                        "type": "text",
-                        "text": prompt
-                    }
+                    {"text": prompt},
+                    media_block
                 ]
             }
-        ]
-    }
-
-    response = bedrock_client.invoke_model(
-        modelId=BEDROCK_MODEL_ID,
-        body=json.dumps(body),
-        contentType='application/json',
-        accept='application/json'
+        ],
+        inferenceConfig={"maxTokens": 1024}
     )
 
-    response_body = json.loads(response['body'].read())
-    raw_text = response_body['content'][0]['text'].strip()
+    raw_text = response['output']['message']['content'][0]['text'].strip()
 
     # Parse JSON response from Claude
     if raw_text.startswith('```'):

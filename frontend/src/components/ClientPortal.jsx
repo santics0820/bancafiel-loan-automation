@@ -106,11 +106,13 @@ function ClientPortal({ active }) {
   const [submitError,   setSubmitError]   = useState(null)
   const fileInputRef = useRef(null)
 
-  // KYC capture — store name + INE image blob
+  // KYC capture
   const handleCapture = (image, mode, name) => {
-    if (mode === 'face') {
-      if (name) setCapturedName(name)
+    if (mode === 'card-combined') {
+      // Combined front+back INE JPEG blob — store for upload
       if (image) setCapturedINEFile(image)
+    } else if (mode === 'face') {
+      if (name) setCapturedName(name)
       setStep('complete')
     }
   }
@@ -135,12 +137,12 @@ function ClientPortal({ active }) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
 
-      // 2. Upload INE scan to S3 if URL provided
+      // 2. Upload INE scan (combined front+back JPEG) to S3 if URL provided
       if (capturedINEFile && data.uploadUrls?.ine) {
         await fetch(data.uploadUrls.ine.url, {
           method: 'PUT',
           body: capturedINEFile,
-          headers: { 'Content-Type': 'application/pdf' },
+          headers: { 'Content-Type': 'image/jpeg' },
         })
       }
 

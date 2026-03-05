@@ -118,6 +118,17 @@
   color: var(--text-primary);
   cursor: pointer;
   border: 1px solid var(--glass-border);
+  transition: all 0.2s;
+}
+
+.filter-chip.active {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.filter-chip:hover {
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .app-list {

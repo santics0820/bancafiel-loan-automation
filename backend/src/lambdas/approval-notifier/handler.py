@@ -22,7 +22,7 @@ except ImportError:
     def not_found_response(m='Not found'): return {'statusCode': 404, 'body': json.dumps({'error': m})}
 
 logger = setup_logger(__name__)
-sns_client = boto3.client('sns')
+ses_client = boto3.client('ses', region_name='us-east-1')
 stepfunctions_client = boto3.client('stepfunctions')
 
 
@@ -65,22 +65,33 @@ def handle_notify_approver(event):
             WHERE a.id = %s
         """, (application_id,))
 
-        # Send SNS notification
-        sns_topic_arn = os.environ.get('APPROVER_SNS_TOPIC_ARN')
+        # Send email directly via SES
+        approver_email = os.environ.get('APPROVER_EMAIL')
+        sender_email = os.environ.get('SENDER_EMAIL', 'bancafiel.noreply@gmail.com')
         frontend_url = os.environ.get('FRONTEND_URL', 'https://bancafiel.com')
 
-        if sns_topic_arn:
-            message = (
-                f"New loan application requires your review.\n\n"
-                f"Customer: {app['full_name'] if app else 'Unknown'}\n"
-                f"Amount: ${app['loan_amount']:,.2f} MXN\n"
-                f"Fraud Risk: {app['fraud_risk_level']} (score: {app['fraud_score']})\n\n"
-                f"Review: {frontend_url}/dashboard/applications/{application_id}"
-            )
-            sns_client.publish(
-                TopicArn=sns_topic_arn,
-                Subject=f'[BancaFiel] Loan Application Pending Approval',
-                Message=message
+        if approver_email:
+            customer_name = app['full_name'] if app else 'Unknown'
+            loan_amount = f"${app['loan_amount']:,.2f} MXN" if app else 'N/A'
+            risk = f"{app['fraud_risk_level']} (score: {app['fraud_score']})" if app else 'N/A'
+            review_url = f"{frontend_url}/dashboard/applications/{application_id}"
+
+            ses_client.send_email(
+                Source=sender_email,
+                Destination={'ToAddresses': [approver_email]},
+                Message={
+                    'Subject': {'Data': '[BancaFiel] Nueva solicitud pendiente de revisión'},
+                    'Body': {
+                        'Text': {'Data': (
+                            f"Tienes una nueva solicitud de crédito para revisar.\n\n"
+                            f"Cliente: {customer_name}\n"
+                            f"Monto solicitado: {loan_amount}\n"
+                            f"Riesgo de fraude: {risk}\n\n"
+                            f"Revisar solicitud: {review_url}\n\n"
+                            f"— BancaFiel Sistema de Crédito"
+                        )}
+                    }
+                }
             )
 
         create_application_history(

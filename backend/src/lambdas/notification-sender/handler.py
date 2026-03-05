@@ -23,61 +23,55 @@ FROM_EMAIL = os.environ.get('SES_FROM_EMAIL', 'bancafiel.noreply@gmail.com')
 
 EMAIL_TEMPLATES = {
     'received': {
-        'subject': 'Hemos recibido su solicitud - BancaFiel',
-        'body': """
-Estimado/a {name},
+        'subject': 'Hemos recibido tu solicitud — BancaFiel',
+        'body': """Hola {name},
 
-Hemos recibido su solicitud de {type} por ${amount:,.2f} MXN correctamente.
+Hemos recibido tu solicitud de línea de crédito por ${amount:,.2f} MXN correctamente.
 
-Número de solicitud: {app_id}
+Folio: {app_id}
 
-Estamos procesando su solicitud. Le notificaremos en máximo 2 horas con el resultado.
+Estamos procesando tu solicitud. Te notificaremos en máximo 2 horas con el resultado.
 
-Gracias por confiar en BancaFiel.
-
-El equipo de BancaFiel
-        """
+— Equipo BancaFiel"""
     },
     'approved': {
-        'subject': '¡Felicidades! Su solicitud fue APROBADA - BancaFiel',
-        'body': """
-Estimado/a {name},
+        'subject': '¡Tu línea de crédito fue aprobada! — BancaFiel',
+        'body': """Hola {name},
 
-¡Excelentes noticias! Su solicitud ha sido APROBADA.
+¡Excelentes noticias! Tu solicitud de línea de crédito ha sido APROBADA.
 
-Detalles:
-• Tipo: {type}
-• Monto aprobado: ${amount:,.2f} MXN
-• Número de solicitud: {app_id}
+─────────────────────────────
+Folio:            {app_id}
+Monto aprobado:   ${amount:,.2f} MXN
+─────────────────────────────
 
-Próximos pasos:
-1. Inicie sesión en su cuenta de BancaFiel
-2. Complete la documentación final
-3. Firme su contrato digitalmente
-4. Reciba su préstamo en 24-48 horas hábiles
+PRÓXIMOS PASOS
+Accede a la app para aceptar tu crédito y completar el proceso:
+👉 https://bancafiel.com
 
-Acceda aquí: https://bancafiel.com/dashboard
+DUDAS O ACLARACIONES
+Escríbenos a soporte@bancafiel.com y te atendemos a la brevedad.
 
 Gracias por confiar en BancaFiel.
-        """
+— Equipo BancaFiel"""
     },
     'rejected': {
-        'subject': 'Actualización sobre su solicitud - BancaFiel',
-        'body': """
-Estimado/a {name},
+        'subject': 'Actualización sobre tu solicitud — BancaFiel',
+        'body': """Hola {name},
 
-Le informamos que su solicitud de {type} por ${amount:,.2f} MXN
-(Número: {app_id}) no pudo ser aprobada en este momento.
+Lamentamos informarte que tu solicitud de línea de crédito no pudo ser aprobada en este momento.
 
-Si desea más información, contáctenos:
-• Email: soporte@bancafiel.com
-• Teléfono: 800-BancaFiel
+─────────────────────────────
+Folio:   {app_id}
+─────────────────────────────
 
-Puede volver a aplicar en 90 días.
+Si tienes dudas o deseas más información, contáctanos:
+✉️  soporte@bancafiel.com
 
-Gracias por su comprensión.
-El equipo de BancaFiel
-        """
+Puedes volver a solicitar en 90 días.
+
+Gracias por tu comprensión.
+— Equipo BancaFiel"""
     }
 }
 
@@ -106,11 +100,8 @@ def handler(event, context):
         customer_email = app['email']
         template = EMAIL_TEMPLATES.get(notification_type, EMAIL_TEMPLATES['received'])
 
-        loan_type_str = 'préstamo personal' if app['application_type'] == 'LOAN' else 'tarjeta de crédito'
-
         body = template['body'].format(
-            name=app['full_name'],
-            type=loan_type_str,
+            name=app['full_name'].title(),
             amount=float(app['loan_amount']),
             app_id=str(application_id)[:8].upper()
         )

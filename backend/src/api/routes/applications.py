@@ -37,9 +37,11 @@ def list_applications(event, context):
                 a.requested_date, a.status, a.fraud_score, a.credit_score,
                 a.fraud_risk_level, a.credit_recommendation,
                 c.full_name AS applicant_name,
-                c.email AS applicant_email
+                c.email AS applicant_email,
+                fc.fraud_reasons
             FROM applications a
             LEFT JOIN customers c ON a.customer_id = c.id
+            LEFT JOIN fraud_checks fc ON fc.application_id = a.id
             WHERE a.status = %s
             ORDER BY a.requested_date DESC
             LIMIT 100
@@ -56,6 +58,7 @@ def list_applications(event, context):
                 'status': r['status'].lower(),
                 'fraudScore': float(r['fraud_score']) if r['fraud_score'] else None,
                 'fraudRiskLevel': r['fraud_risk_level'].lower() if r['fraud_risk_level'] else None,
+                'fraudReasons': r['fraud_reasons'] if r['fraud_reasons'] else [],
                 'creditScore': r['credit_score'],
                 'creditRecommendation': r['credit_recommendation']
             }
@@ -101,6 +104,10 @@ def get_application(event, context):
             WHERE d.application_id = %s
         """, (application_id,))
 
+        fraud_check = execute_query_single("""
+            SELECT fraud_reasons FROM fraud_checks WHERE application_id = %s
+        """, (application_id,))
+
         return success_response({
             'id': str(app['id']),
             'applicantName': app['full_name'],
@@ -115,6 +122,7 @@ def get_application(event, context):
             'status': app['status'].lower(),
             'fraudScore': float(app['fraud_score']) if app['fraud_score'] else None,
             'fraudRiskLevel': app['fraud_risk_level'].lower() if app['fraud_risk_level'] else None,
+            'fraudReasons': fraud_check['fraud_reasons'] if fraud_check else [],
             'creditScore': app['credit_score'],
             'creditRecommendation': app['credit_recommendation'],
             'documents': [{'type': d['document_type'], 'url': f"s3://{d['s3_bucket']}/{d['s3_key']}"} for d in documents],
@@ -155,14 +163,18 @@ def submit_application(event, context):
         # Create application record (customer linked later after OCR)
         result = execute_query("""
             INSERT INTO applications
-            (application_type, loan_amount, monthly_income, existing_debt, status, requested_date)
-            VALUES (%s, %s, %s, %s, 'PENDING', %s)
+            (application_type, loan_amount, monthly_income, existing_debt,
+             applicant_name, applicant_email, applicant_phone, status, requested_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'PENDING', %s)
             RETURNING id
         """, (
             application_type,
             loan_amount,
             float(body.get('monthlyIncome') or 0),
             float(body.get('existingDebt') or 0),
+            body.get('applicantName'),
+            body.get('applicantEmail'),
+            body.get('applicantPhone'),
             datetime.now(UTC)
         ))
 
@@ -172,12 +184,17 @@ def submit_application(event, context):
         incoming_bucket = os.environ.get('INCOMING_BUCKET', '')
         upload_urls = {}
 
-        for doc_type in ['ine', 'proof_of_address', 'bank_statement']:
+        doc_configs = {
+            'ine':              {'ext': 'jpg',  'content_type': 'image/jpeg'},
+            'proof_of_address': {'ext': 'pdf',  'content_type': 'application/pdf'},
+            'bank_statement':   {'ext': 'pdf',  'content_type': 'application/pdf'},
+        }
+        for doc_type, cfg in doc_configs.items():
             if incoming_bucket:
-                key = f"applications/{application_id}/{doc_type}.pdf"
+                key = f"applications/{application_id}/{doc_type}.{cfg['ext']}"
                 url = s3_client.generate_presigned_url(
                     'put_object',
-                    Params={'Bucket': incoming_bucket, 'Key': key, 'ContentType': 'application/pdf'},
+                    Params={'Bucket': incoming_bucket, 'Key': key, 'ContentType': cfg['content_type']},
                     ExpiresIn=3600
                 )
                 upload_urls[doc_type] = {'url': url, 'key': key}
