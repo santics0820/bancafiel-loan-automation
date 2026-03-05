@@ -16,12 +16,6 @@ function ViewToggle({ currentView, onViewChange }) {
         >
           ANALYST
         </button>
-        <button
-          className={`toggle-item ${currentView === 'liquid' ? 'active' : ''}`}
-          onClick={() => onViewChange('liquid')}
-        >
-          DEMO
-        </button>
       </div>
     </div>
   )
