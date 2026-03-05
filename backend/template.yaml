@@ -563,6 +563,51 @@ Resources:
             Path: /api/loans
             Method: POST
 
+  AuthRegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-authRegister-${Environment}
+      CodeUri: src/api/routes/
+      Handler: auth.register
+      Description: POST /api/auth/register - Create client account
+      Events:
+        Register:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/auth/register
+            Method: POST
+
+  AuthLoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-authLogin-${Environment}
+      CodeUri: src/api/routes/
+      Handler: auth.login
+      Description: POST /api/auth/login - Verify credentials
+      Events:
+        Login:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/auth/login
+            Method: POST
+
+  GetApplicationStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-getApplicationStatus-${Environment}
+      CodeUri: src/api/routes/
+      Handler: applications.get_application_status
+      Description: GET /api/loans/status - Client folio status lookup
+      Events:
+        GetStatus:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/loans/status
+            Method: GET
+
   GetFraudDataFunction:
     Type: AWS::Serverless::Function
     Properties:

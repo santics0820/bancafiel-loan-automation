@@ -25,6 +25,72 @@ logger = setup_logger(__name__)
 s3_client = boto3.client('s3')
 
 
+def get_application_status(event, context):
+    """GET /api/loans/status?folio=&email="""
+    try:
+        params = event.get('queryStringParameters') or {}
+        folio = (params.get('folio') or '').strip().upper()
+        email = (params.get('email') or '').strip().lower()
+
+        if not folio or not email:
+            return error_response('folio y email requeridos', 400)
+
+        app = execute_query_single("""
+            SELECT a.id, a.status, a.loan_amount, a.created_at,
+                   UPPER(LEFT(a.id::text, 8)) as folio,
+                   COALESCE(c.full_name, a.applicant_name) as name,
+                   a.fraud_risk_level as risk_level
+            FROM applications a
+            LEFT JOIN customers c ON a.customer_id = c.id
+            WHERE UPPER(LEFT(a.id::text, 8)) = %s
+              AND LOWER(COALESCE(c.email, a.applicant_email)) = %s
+        """, (folio, email))
+
+        if not app:
+            return not_found_response('Solicitud no encontrada')
+
+        history = execute_query("""
+            SELECT action FROM application_history
+            WHERE application_id = %s ORDER BY created_at ASC
+        """, (str(app['id']),))
+
+        actions = {h['action'] for h in (history or [])}
+
+        def step_status(done_action, active_action=None):
+            if done_action in actions:
+                return 'done'
+            if active_action and active_action in actions:
+                return 'active'
+            return 'pending'
+
+        steps = [
+            {'label': 'Solicitud recibida',        'status': 'done'},
+            {'label': 'Verificación de identidad', 'status': step_status('validation_completed', 'document_processed')},
+            {'label': 'Análisis de documentos',    'status': 'done' if ('approved' in actions or 'rejected' in actions) else step_status('fraud_checked', 'validation_completed')},
+            {'label': 'Resolución final',          'status': 'done' if ('approved' in actions or 'rejected' in actions) else ('active' if 'fraud_checked' in actions else 'pending')},
+        ]
+
+        # If nothing is active yet, mark first pending as active
+        if not any(s['status'] == 'active' for s in steps):
+            for s in steps:
+                if s['status'] == 'pending':
+                    s['status'] = 'active'
+                    break
+
+        return success_response({
+            'folio':      app['folio'],
+            'status':     app['status'],
+            'riskLevel':  app.get('risk_level'),
+            'name':       app.get('name'),
+            'loanAmount': app.get('loan_amount'),
+            'steps':      steps,
+        })
+
+    except Exception as e:
+        log_error(logger, 'get_application_status_error', e)
+        return error_response('Error al obtener estado', 500)
+
+
 def list_applications(event, context):
     """GET /api/loans?status=pending"""
     try:

@@ -69,6 +69,28 @@ const INCOME_TYPES = [
       </svg>
     ),
   },
+  {
+    key: 'estudiante', label: 'Estudiante',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+        <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'sin_ingresos', label: 'Sin ingresos propios',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    ),
+  },
 ]
 
 const INCOME_RANGES = [
@@ -79,7 +101,7 @@ const INCOME_RANGES = [
 ]
 
 function computeCredit(type, range) {
-  const mult = { asalariado: 1, independiente: 0.9, empresario: 1.3, pensionado: 0.75 }
+  const mult = { asalariado: 1, independiente: 0.9, empresario: 1.3, pensionado: 0.75, estudiante: 0.5, sin_ingresos: 0.35 }
   const base = { '5-15': 12000, '15-30': 30000, '30-50': 55000, '50+': 90000 }
   return Math.min(Math.round((base[range] * mult[type]) / 1000) * 1000, 100000)
 }
@@ -97,6 +119,8 @@ function ClientPortal({ active }) {
   const [isDragging,    setIsDragging]    = useState(false)
   const [rfc,           setRfc]           = useState('')
   const [email,         setEmail]         = useState('')
+  const [authMode,      setAuthMode]      = useState('new')     // 'new' | 'existing'
+  const [authPassword,  setAuthPassword]  = useState('')
   const [incomeType,    setIncomeType]    = useState(null)
   const [incomeRange,   setIncomeRange]   = useState(null)
   const [creditLine,    setCreditLine]    = useState(0)
@@ -104,9 +128,67 @@ function ClientPortal({ active }) {
   const [capturedINEFile, setCapturedINEFile] = useState(null)
   const [applicationId, setApplicationId] = useState(null)
   const [submitError,   setSubmitError]   = useState(null)
+  const [authError,     setAuthError]     = useState(null)
+  const [authLoading,   setAuthLoading]   = useState(false)
+  const [authStep,      setAuthStep]      = useState('email') // 'email' | 'password'
+  const [trackingData,  setTrackingData]  = useState(null)
+  const [trackingLoading, setTrackingLoading] = useState(false)
   const fileInputRef = useRef(null)
 
-  // KYC capture
+  const authValid = email.includes('@') && email.includes('.')
+  const canSignIn = authValid && authPassword.length >= 6
+
+  const handleAuth = async () => {
+    setAuthError(null)
+    setAuthLoading(true)
+    try {
+      const endpoint = authMode === 'new' ? '/api/auth/register' : '/api/auth/login'
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: authPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setAuthError(data.error || 'Error al autenticar'); setAuthLoading(false); return }
+
+      localStorage.setItem('bf_token', data.token)
+      localStorage.setItem('bf_email', data.email)
+
+      if (authMode === 'new') {
+        setStep('kyc-notice')
+      } else {
+        // Existing user — fetch their application status
+        if (data.hasApplication && data.folio) {
+          setApplicationId(data.folio)
+          const statusRes = await fetch(`${API_URL}/api/loans/status?folio=${data.folio}&email=${data.email}`)
+          if (statusRes.ok) {
+            const statusData = await statusRes.json()
+            setTrackingData(statusData)
+          }
+          setStep('tracking')
+        } else {
+          setStep('kyc-notice')
+        }
+      }
+    } catch (err) {
+      console.error('handleAuth error:', err)
+      setAuthError('Error de conexión. Intenta de nuevo.')
+    }
+    setAuthLoading(false)
+  }
+
+  const handleShowTracking = async () => {
+    setTrackingLoading(true)
+    try {
+      const folio = applicationId?.slice(0, 8).toUpperCase()
+      const res = await fetch(`${API_URL}/api/loans/status?folio=${folio}&email=${encodeURIComponent(email)}`)
+      if (res.ok) setTrackingData(await res.json())
+    } catch (e) { /* show screen anyway with defaults */ }
+    setTrackingLoading(false)
+    setStep('tracking')
+  }
+
+  // KYC capture — store name + INE image blob
   const handleCapture = (image, mode, name) => {
     if (mode === 'card-combined') {
       // Combined front+back INE JPEG blob — store for upload
@@ -201,7 +283,7 @@ function ClientPortal({ active }) {
               <h1>Solicita tu tarjeta</h1>
               <p>100% digital · Menos de 5 minutos</p>
             </div>
-            <button className="liquid-btn kyc-cta" onClick={() => setStep('kyc')}>
+            <button className="liquid-btn kyc-cta" onClick={() => setStep('auth')}>
               Empezar
             </button>
           </div>
@@ -233,11 +315,204 @@ function ClientPortal({ active }) {
         </div>
       )}
 
+      {/* ── AUTH ── */}
+      {step === 'auth' && (
+        <div className="kyc-card glass-panel">
+          <Logo />
+
+          {/* Tab toggle: new vs existing */}
+          <div className="auth-tab-toggle">
+            <button
+              className={`auth-tab ${authMode === 'new' ? 'active' : ''}`}
+              onClick={() => { setAuthMode('new'); setAuthPassword(''); setAuthStep('email'); setAuthError(null) }}
+            >
+              Nuevo cliente
+            </button>
+            <button
+              className={`auth-tab ${authMode === 'existing' ? 'active' : ''}`}
+              onClick={() => setAuthMode('existing')}
+            >
+              Ya tengo cuenta
+            </button>
+          </div>
+
+          <div className="kyc-intro" style={{ gap: '6px' }}>
+            <h1 style={{ fontSize: '1.5rem' }}>
+              {authMode === 'new'
+                ? (authStep === 'email' ? 'Crea tu cuenta' : 'Crea tu contraseña')
+                : 'Bienvenido de vuelta'}
+            </h1>
+            <p>
+              {authMode === 'new'
+                ? (authStep === 'email' ? 'Ingresa tu correo para comenzar.' : `Cuenta: ${email}`)
+                : 'Ingresa tu correo y contraseña.'}
+            </p>
+          </div>
+
+          <div className="auth-fields">
+            {/* Email: always shown for existing; only on step 'email' for new */}
+            {(authMode === 'existing' || authStep === 'email') && (
+              <input
+                className="rfc-input"
+                type="email"
+                placeholder="correo@ejemplo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+              />
+            )}
+            {/* Password: always shown for existing; only on step 'password' for new */}
+            {(authMode === 'existing' || authStep === 'password') && (
+              <input
+                className="rfc-input"
+                type="password"
+                placeholder={authMode === 'new' ? 'Crea una contraseña (mín. 6 caracteres)' : 'Contraseña'}
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                autoFocus={authMode === 'new' && authStep === 'password'}
+              />
+            )}
+          </div>
+
+          {authError && (
+            <p style={{ color: '#f87171', fontSize: '13px', textAlign: 'center', marginTop: '4px' }}>{authError}</p>
+          )}
+
+          {/* Step 1 for new: just validate email and advance */}
+          {authMode === 'new' && authStep === 'email' && (
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!authValid}
+              style={{ opacity: authValid ? 1 : 0.35, cursor: authValid ? 'pointer' : 'not-allowed' }}
+              onClick={() => { setAuthError(null); setAuthStep('password') }}
+            >
+              Continuar →
+            </button>
+          )}
+
+          {/* Step 2 for new: validate password and submit */}
+          {authMode === 'new' && authStep === 'password' && (
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!canSignIn || authLoading}
+              style={{ opacity: (canSignIn && !authLoading) ? 1 : 0.35, cursor: (canSignIn && !authLoading) ? 'pointer' : 'not-allowed' }}
+              onClick={handleAuth}
+            >
+              {authLoading ? 'Verificando…' : 'Continuar →'}
+            </button>
+          )}
+
+          {/* Existing user: single step */}
+          {authMode === 'existing' && (
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!canSignIn || authLoading}
+              style={{ opacity: (canSignIn && !authLoading) ? 1 : 0.35, cursor: (canSignIn && !authLoading) ? 'pointer' : 'not-allowed' }}
+              onClick={handleAuth}
+            >
+              {authLoading ? 'Verificando…' : 'Iniciar sesión →'}
+            </button>
+          )}
+
+          {authMode === 'new' && authStep === 'password'
+            ? <button className="auth-back-link" onClick={() => { setAuthError(null); setAuthStep('email') }}>← Cambiar correo</button>
+            : <button className="auth-back-link" onClick={() => { setAuthError(null); setAuthStep('email'); setStep('landing') }}>← Volver</button>
+          }
+        </div>
+      )}
+
+      {/* ── SIGNED IN (existing client) ── */}
+      {step === 'signedin' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="check-ring">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="30" stroke="#6ee7b7" strokeWidth="1.5" opacity="0.2"/>
+              <path className="check-path" d="M18 32 L27 41 L46 22"
+                stroke="#6ee7b7" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <p className="complete-label">Sesión iniciada</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center' }}>
+            Bienvenido de vuelta,<br /><strong style={{ color: 'var(--text-primary)' }}>{email}</strong>
+          </p>
+          <button className="liquid-btn kyc-cta" onClick={() => setStep('kyc-notice')}
+            style={{ marginTop: '8px' }}>
+            Solicitar nueva tarjeta →
+          </button>
+          <button className="auth-back-link" onClick={() => setStep('auth')}>
+            ← Cambiar cuenta
+          </button>
+        </div>
+      )}
+
+      {/* ── KYC NOTICE ── */}
+      {step === 'kyc-notice' && (
+        <div className="kyc-card glass-panel kyc-notice-card">
+          <div className="kyc-notice-icons">
+            {/* Person icon */}
+            <div className="kyc-notice-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              </svg>
+            </div>
+
+            <div className="kyc-notice-plus">+</div>
+
+            {/* ID card icon */}
+            <div className="kyc-notice-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                <circle cx="8" cy="12" r="2"/>
+                <path d="M13 10h4M13 14h3"/>
+              </svg>
+            </div>
+          </div>
+
+          <div className="kyc-intro">
+            <h1>Verificación de identidad</h1>
+            <p>
+              Para continuar necesitamos verificar tu identidad.<br/>
+              Ten a la mano tu <strong style={{ color: 'var(--text-primary)' }}>INE</strong> y
+              asegúrate de estar en un lugar con <strong style={{ color: 'var(--text-primary)' }}>buena iluminación</strong>.
+            </p>
+          </div>
+
+          <div className="kyc-notice-steps">
+            <div className="kyc-notice-step">
+              <span className="kyc-notice-num">1</span>
+              <span>Fotografía frontal de tu INE</span>
+            </div>
+            <div className="kyc-notice-step">
+              <span className="kyc-notice-num">2</span>
+              <span>Fotografía trasera de tu INE</span>
+            </div>
+            <div className="kyc-notice-step">
+              <span className="kyc-notice-num">3</span>
+              <span>Selfie para confirmar tu identidad</span>
+            </div>
+          </div>
+
+          <button className="liquid-btn kyc-cta" onClick={() => setStep('kyc')}>
+            Comenzar verificación →
+          </button>
+
+          <button className="auth-back-link" onClick={() => setStep('auth')}>
+            ← Volver
+          </button>
+        </div>
+      )}
+
       {/* ── KYC CAMERA ── */}
       {step === 'kyc' && (
         <div className="portal-card glass-panel scanner-mode">
           <div className="scanner-view">
-            <INEScanner onCapture={handleCapture} onBack={() => setStep('landing')} />
+            <INEScanner onCapture={handleCapture} onBack={() => setStep('auth')} />
           </div>
         </div>
       )}
@@ -341,19 +616,9 @@ function ClientPortal({ active }) {
             <span className="rfc-hint">{rfc.length} / 12–13 caracteres</span>
           </div>
 
-          <div className="rfc-field" style={{ marginTop: '12px' }}>
-            <input
-              className="rfc-input"
-              type="email"
-              placeholder="correo@ejemplo.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
           <button className="liquid-btn kyc-cta"
-            disabled={rfc.length < 12 || !email.includes('@')}
-            style={{ opacity: (rfc.length >= 12 && email.includes('@')) ? 1 : 0.35, cursor: (rfc.length >= 12 && email.includes('@')) ? 'pointer' : 'not-allowed' }}
+            disabled={rfc.length < 12}
+            style={{ opacity: rfc.length >= 12 ? 1 : 0.35, cursor: rfc.length >= 12 ? 'pointer' : 'not-allowed' }}
             onClick={() => setStep('income')}
           >
             Continuar →
@@ -484,8 +749,62 @@ function ClientPortal({ active }) {
           <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '8px', textAlign: 'center' }}>
             Te notificaremos a <strong>{email}</strong> en máximo 2 horas.
           </p>
+          <button className="liquid-btn kyc-cta" onClick={handleShowTracking}
+            disabled={trackingLoading}
+            style={{ marginTop: '16px', opacity: trackingLoading ? 0.5 : 1 }}>
+            {trackingLoading ? 'Cargando…' : 'Ver estado →'}
+          </button>
         </div>
       )}
+
+      {/* ── TRACKING ── */}
+      {step === 'tracking' && (() => {
+        const defaultSteps = [
+          { label: 'Solicitud recibida',        status: 'done'    },
+          { label: 'Verificación de identidad', status: 'done'    },
+          { label: 'Análisis de documentos',    status: 'active'  },
+          { label: 'Resolución final',          status: 'pending' },
+        ]
+        const steps = trackingData?.steps || defaultSteps
+        const folio  = applicationId?.slice(0, 8).toUpperCase() || trackingData?.folio
+        return (
+          <div className="kyc-card glass-panel tracking-view">
+            <Logo />
+            <div className="kyc-intro" style={{ gap: '4px' }}>
+              <h1 style={{ fontSize: '1.4rem' }}>Estado de tu solicitud</h1>
+              <p style={{ fontFamily: 'monospace', fontSize: '15px', color: 'var(--text-primary)' }}>
+                Folio {folio}
+              </p>
+            </div>
+
+            <div className="tracking-pipeline">
+              {steps.map((s, i) => (
+                <div key={i} className={`tracking-step ${s.status}`}>
+                  <div className="tracking-node">
+                    {s.status === 'done' && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2.5 7 L5.5 10 L11.5 4" stroke="currentColor" strokeWidth="1.8"
+                          strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                    {s.status === 'active' && <div className="tracking-pulse" />}
+                  </div>
+                  {i < steps.length - 1 && <div className="tracking-connector" />}
+                  <span className="tracking-label">{s.label}</span>
+                  <span className="tracking-badge">{
+                    s.status === 'done'    ? 'Completado' :
+                    s.status === 'active'  ? 'En proceso' : 'Pendiente'
+                  }</span>
+                </div>
+              ))}
+            </div>
+
+            <button className="auth-back-link" onClick={() => setStep('confirmed')}>
+              ← Volver
+            </button>
+          </div>
+        )
+      })()}
 
     </div>
   )
