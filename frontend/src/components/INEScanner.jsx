@@ -24,6 +24,7 @@ const INEScanner = ({ onCapture, onBack }) => {
   const webcamRef                     = useRef(null);
   const [capturedImg, setCapturedImg] = useState(null);
   const [mode, setMode]               = useState('card-front');
+  const [frontImg, setFrontImg]       = useState(null);
 
   const isCardMode = mode !== 'face';
   const stepIndex  = STEPS.findIndex(s => s.key === mode);
@@ -39,12 +40,12 @@ const INEScanner = ({ onCapture, onBack }) => {
     const screenshot = webcamRef.current.getScreenshot();
     const guide      = isCardMode ? GUIDE.card : GUIDE.face;
 
-    const img   = new Image();
-    img.onload  = () => {
-      const imgW  = img.naturalWidth;
-      const imgH  = img.naturalHeight;
+    const img  = new Image();
+    img.onload = () => {
+      const imgW = img.naturalWidth;
+      const imgH = img.naturalHeight;
 
-      // Clamp al tamaño real del frame para evitar sy/sx negativos
+      // Clamp al tamaño real del frame para evitar sx/sy negativos
       let cropW = imgW * guide.widthPct;
       let cropH = cropW / guide.ratio;
       if (cropH > imgH) { cropH = imgH; cropW = cropH * guide.ratio; }
@@ -63,11 +64,46 @@ const INEScanner = ({ onCapture, onBack }) => {
     img.src = screenshot;
   }, [isCardMode]);
 
+  const combineFrontBack = (frontDataUrl, backDataUrl) => {
+    return new Promise((resolve) => {
+      const front = new Image();
+      const back  = new Image();
+      front.onload = () => {
+        back.onload = () => {
+          const canvas = document.createElement('canvas');
+          const gap    = 20;
+          canvas.width  = Math.max(front.width, back.width);
+          canvas.height = front.height + gap + back.height;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(front, 0, 0);
+          ctx.drawImage(back,  0, front.height + gap);
+          canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95);
+        };
+        back.src = backDataUrl;
+      };
+      front.src = frontDataUrl;
+    });
+  };
+
   const confirm = () => {
-    if (onCapture) onCapture(capturedImg, mode);
-    setCapturedImg(null);
-    if (mode === 'card-front')     setMode('card-back');
-    else if (mode === 'card-back') setMode('face');
+    if (mode === 'card-front') {
+      setFrontImg(capturedImg);
+      setCapturedImg(null);
+      setMode('card-back');
+    } else if (mode === 'card-back') {
+      // Combine front + back into one JPEG blob and pass to parent
+      combineFrontBack(frontImg, capturedImg).then((blob) => {
+        if (onCapture) onCapture(blob, 'card-combined');
+      });
+      setCapturedImg(null);
+      setMode('face');
+    } else if (mode === 'face') {
+      // Selfie — just advance, no image sent to Bedrock
+      if (onCapture) onCapture(null, 'face');
+      setCapturedImg(null);
+    }
   };
 
   const retake = () => setCapturedImg(null);
@@ -75,7 +111,7 @@ const INEScanner = ({ onCapture, onBack }) => {
   return (
     <div className="ine-scanner">
 
-      {/* Header: ← volver  |  step indicators */}
+      {/* Header: ← volver | step indicators */}
       <div className="ine-steps">
         <button className="ine-back-btn" onClick={onBack}>← Volver</button>
         <div className="ine-steps-track">
@@ -114,7 +150,7 @@ const INEScanner = ({ onCapture, onBack }) => {
               <span>{INSTRUCTIONS[mode].hint}</span>
             </p>
             <div className="ine-actions-buttons">
-              <button className="btn btn-primary" onClick={capture}>
+              <button className="ine-btn-primary" onClick={capture}>
                 Tomar foto
               </button>
             </div>
@@ -127,10 +163,10 @@ const INEScanner = ({ onCapture, onBack }) => {
           </div>
           <div className="ine-actions">
             <div className="ine-actions-buttons">
-              <button className="btn btn-primary" onClick={confirm}>
+              <button className="ine-btn-primary" onClick={confirm}>
                 Confirmar foto
               </button>
-              <button className="btn btn-reject" onClick={retake}>
+              <button className="ine-btn-reject" onClick={retake}>
                 Volver a tomar
               </button>
             </div>

@@ -1,0 +1,154 @@
+.cc-card {
+  width: 100%;
+  height: 100%;
+  border-radius: 20px;
+  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  color: white;
+}
+
+/* ── Variants ── */
+.cc-gray-dark {
+  background: linear-gradient(145deg, #1e2128 0%, #0e1014 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.07);
+}
+
+.cc-blue-dark {
+  background: linear-gradient(145deg, #0e1d33 0%, #070d1c 100%);
+  border: 1px solid rgba(96, 165, 250, 0.14);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(96,165,250,0.1);
+}
+
+.cc-gold-dark {
+  background: linear-gradient(145deg, #1c1608 0%, #0c0a03 100%);
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  box-shadow: 0 30px 60px rgba(0,0,0,0.7), inset 0 1px 0 rgba(251,191,36,0.1);
+}
+
+/* Shine */
+.cc-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 55%);
+  pointer-events: none;
+  border-radius: 20px;
+}
+
+/* Top row */
+.cc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.cc-brand {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  opacity: 0.88;
+}
+
+.cc-blue-dark .cc-brand { color: rgba(147, 197, 253, 0.95); }
+.cc-gold-dark .cc-brand { color: rgba(253, 224, 71, 0.95);  }
+
+.cc-paypass {
+  opacity: 0.5;
+  transform: rotate(90deg);
+}
+
+/* Chip (sits between top and bottom) */
+.cc-chip {
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+}
+
+/* Bottom section */
+.cc-bottom {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cc-bottom-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.cc-label {
+  font-size: 0.46rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  opacity: 0.4;
+  text-transform: uppercase;
+}
+
+.cc-value {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+
+.cc-number-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cc-number {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  opacity: 0.75;
+  font-family: var(--font-main);
+}
+
+.cc-expiry {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+/* Mastercard */
+.cc-mc-wrap {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 30px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.07);
+}
+
+/* Tier */
+.cc-tier {
+  position: absolute;
+  top: 18px;
+  right: 52px;
+  font-size: 0.44rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  opacity: 0.3;
+  text-transform: uppercase;
+}

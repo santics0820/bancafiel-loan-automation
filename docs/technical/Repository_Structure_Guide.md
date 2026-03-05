@@ -24,7 +24,7 @@ bancafiel-loan-automation/
 │   ├── README.md                      # Backend setup instructions
 │   ├── src/
 │   │   ├── lambdas/                   # AWS Lambda functions
-│   │   │   ├── document-processor/    # Textract OCR lambda
+│   │   │   ├── document-processor/    # Bedrock OCR lambda (Claude Sonnet 4.5)
 │   │   │   ├── fraud-detector/        # Fraud Detector lambda
 │   │   │   ├── credit-scorer/         # Credit scoring lambda
 │   │   │   └── notification-sender/   # SES notification lambda

@@ -1,409 +1,237 @@
-import { useState } from 'react'
-import './FraudDetection.css'
+import { useState, useEffect } from 'react'
+import { API_URL } from '../config'
 
-const fraudApplications = [
-  {
-    id: 'LN-2024-8815',
-    name: 'Sofia Martinez',
-    fraudScore: 8.7,
-    riskLevel: 'HIGH',
-    time: '1H AGO',
-    flags: ['Address Mismatch', 'Income Inconsistent', 'Document Quality Low'],
-    details: {
-      identityConfidence: 95.2,
-      documentAuthenticity: 78.5,
-      behaviorScore: 42.0,
-      ipReputation: 'SUSPICIOUS',
-      deviceFingerprint: 'NEW DEVICE',
-      velocityCheck: 'FAILED'
-    }
-  },
-  {
-    id: 'LN-2024-8810',
-    name: 'Pedro Ramirez',
-    fraudScore: 6.3,
-    riskLevel: 'MEDIUM',
-    time: '3H AGO',
-    flags: ['Multiple Applications', 'Synthetic Identity Indicators'],
-    details: {
-      identityConfidence: 89.5,
-      documentAuthenticity: 85.2,
-      behaviorScore: 55.0,
-      ipReputation: 'MODERATE',
-      deviceFingerprint: 'KNOWN DEVICE',
-      velocityCheck: 'WARNING'
-    }
-  },
-  {
-    id: 'LN-2024-8805',
-    name: 'Carlos Hernandez',
-    fraudScore: 12.4,
-    riskLevel: 'CRITICAL',
-    time: '5H AGO',
-    flags: ['Forged Documents', 'Stolen Identity', 'Blacklist Match', 'IP Proxy Detected'],
-    details: {
-      identityConfidence: 45.8,
-      documentAuthenticity: 32.0,
-      behaviorScore: 15.0,
-      ipReputation: 'BLACKLISTED',
-      deviceFingerprint: 'SUSPICIOUS',
-      velocityCheck: 'CRITICAL'
-    }
-  },
-  {
-    id: 'LN-2024-8821',
-    name: 'Elena Rodriguez',
-    fraudScore: 1.2,
-    riskLevel: 'LOW',
-    time: '10M AGO',
-    flags: ['Minor Income Variance'],
-    details: {
-      identityConfidence: 99.8,
-      documentAuthenticity: 98.5,
-      behaviorScore: 92.0,
-      ipReputation: 'CLEAN',
-      deviceFingerprint: 'VERIFIED',
-      velocityCheck: 'PASSED'
-    }
-  },
-  {
-    id: 'LN-2024-8798',
-    name: 'Ana Torres',
-    fraudScore: 5.8,
-    riskLevel: 'MEDIUM',
-    time: '8H AGO',
-    flags: ['Employment Verification Pending', 'Unusual Transaction Pattern'],
-    details: {
-      identityConfidence: 92.0,
-      documentAuthenticity: 88.0,
-      behaviorScore: 68.0,
-      ipReputation: 'MODERATE',
-      deviceFingerprint: 'NEW DEVICE',
-      velocityCheck: 'WARNING'
-    }
-  }
-]
-
-const fraudStats = {
-  totalScanned: 147,
-  highRisk: 8,
-  mediumRisk: 23,
-  lowRisk: 116,
-  avgFraudScore: 2.1,
-  blocked: 5,
-  flaggedToday: 3
+const riskColors = {
+  HIGH:   '#f87171',
+  MEDIUM: '#fbbf24',
+  LOW:    '#6ee7b7',
 }
 
-const fraudPatterns = [
-  { pattern: 'Document Forgery', detected: 12, trend: 'up' },
-  { pattern: 'Identity Theft', detected: 8, trend: 'down' },
-  { pattern: 'Income Fraud', detected: 18, trend: 'stable' },
-  { pattern: 'Synthetic Identity', detected: 5, trend: 'up' },
-  { pattern: 'Address Fraud', detected: 14, trend: 'stable' }
-]
+const statusLabel = {
+  processing: 'Pendiente',
+  approved:   'Aprobada',
+  rejected:   'Rechazada',
+}
 
-const recentBlocked = [
-  { id: 'LN-2024-8803', reason: 'Forged Documents', time: '4h ago', score: 15.2 },
-  { id: 'LN-2024-8796', reason: 'Stolen Identity', time: '1d ago', score: 18.7 },
-  { id: 'LN-2024-8789', reason: 'Blacklist Match', time: '2d ago', score: 22.1 }
-]
+const statusColors = {
+  processing: '#fbbf24',
+  approved:   '#6ee7b7',
+  rejected:   '#f87171',
+}
 
 function FraudDetection({ active }) {
-  const [selectedApp, setSelectedApp] = useState(fraudApplications[0])
-  const [filterLevel, setFilterLevel] = useState('ALL')
+  const [data,       setData]       = useState(null)
+  const [selected,   setSelected]   = useState(null)
+  const [filter,     setFilter]     = useState('ALL')
+  const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState(null)
 
-  const filteredApps = filterLevel === 'ALL'
-    ? fraudApplications
-    : fraudApplications.filter(app => app.riskLevel === filterLevel)
+  useEffect(() => {
+    if (!active) return
+    setLoading(true)
+    setError(null)
+    fetch(`${API_URL}/api/fraud`)
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(d => {
+        setData(d)
+        const flagged = d.flaggedApplications ?? []
+        setSelected(flagged[0] ?? null)
+        setLoading(false)
+      })
+      .catch(err => { console.error(err); setError(true); setLoading(false) })
+  }, [active])
+
+  if (!active) return null
+
+  if (loading) return (
+    <div className="workspace" style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Cargando datos de fraude…</p>
+    </div>
+  )
+
+  if (error) return (
+    <div className="workspace" style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: '#f87171', fontSize: '13px' }}>No se pudo cargar la información de fraude.</p>
+    </div>
+  )
+
+  const stats    = data?.stats ?? {}
+  const patterns = data?.patterns ?? []
+  const blocked  = data?.recentBlocked ?? []
+  const flagged  = (data?.flaggedApplications ?? []).filter(a =>
+    filter === 'ALL' || a.riskLevel === filter
+  )
 
   return (
-    <div className={`fraud-detection-view ${active ? 'active' : ''}`}>
-      <div className="fraud-header">
-        <div>
-          <h1 className="fraud-title">Fraud Detection System</h1>
-          <p className="fraud-subtitle">AI-powered fraud analysis and prevention</p>
-        </div>
-        <div className="fraud-status">
-          <div className="shield-icon">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
+    <div className="workspace" style={{ overflow: 'auto', padding: '24px', gap: '20px', flexDirection: 'column' }}>
+
+      {/* Stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px' }}>
+        {[
+          { label: 'Escaneadas',    value: stats.totalScanned ?? 0,   color: 'var(--text-primary)' },
+          { label: 'Riesgo Alto',   value: stats.highRisk ?? 0,       color: '#f87171' },
+          { label: 'Riesgo Medio',  value: stats.mediumRisk ?? 0,     color: '#fbbf24' },
+          { label: 'Riesgo Bajo',   value: stats.lowRisk ?? 0,        color: '#6ee7b7' },
+          { label: 'Score Promedio',value: `${stats.avgFraudScore ?? 0}%`, color: 'var(--text-primary)' },
+          { label: 'Hoy',           value: stats.flaggedToday ?? 0,   color: 'var(--accent-blue)' },
+        ].map(s => (
+          <div key={s.label} className="glass-panel" style={{ padding: '16px', textAlign: 'center' }}>
+            <div style={{ fontSize: '24px', fontWeight: 700, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.label}</div>
           </div>
-          <div>
-            <div className="fraud-status-label">System Status</div>
-            <div className="fraud-status-value">ACTIVE MONITORING</div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Fraud Statistics */}
-      <div className="fraud-stats-grid">
-        <div className="fraud-stat-card critical">
-          <div className="fraud-stat-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </div>
-          <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.highRisk}</div>
-            <div className="fraud-stat-label">High Risk</div>
-          </div>
-        </div>
-        <div className="fraud-stat-card warning">
-          <div className="fraud-stat-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-          </div>
-          <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.mediumRisk}</div>
-            <div className="fraud-stat-label">Medium Risk</div>
-          </div>
-        </div>
-        <div className="fraud-stat-card safe">
-          <div className="fraud-stat-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </div>
-          <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.lowRisk}</div>
-            <div className="fraud-stat-label">Low Risk</div>
-          </div>
-        </div>
-        <div className="fraud-stat-card">
-          <div className="fraud-stat-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-          </div>
-          <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.blocked}</div>
-            <div className="fraud-stat-label">Blocked</div>
-          </div>
-        </div>
-        <div className="fraud-stat-card">
-          <div className="fraud-stat-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="20" x2="12" y2="10"/>
-              <line x1="18" y1="20" x2="18" y2="4"/>
-              <line x1="6" y1="20" x2="6" y2="16"/>
-            </svg>
-          </div>
-          <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.avgFraudScore}%</div>
-            <div className="fraud-stat-label">Avg Score</div>
-          </div>
-        </div>
-        <div className="fraud-stat-card">
-          <div className="fraud-stat-icon">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          </div>
-          <div className="fraud-stat-content">
-            <div className="fraud-stat-value">{fraudStats.flaggedToday}</div>
-            <div className="fraud-stat-label">Flagged Today</div>
-          </div>
-        </div>
-      </div>
+      {/* Main content */}
+      <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 240px', gap: '16px', minHeight: 0 }}>
 
-      {/* Main Content Grid */}
-      <div className="fraud-main-grid">
-        {/* Left Panel - Application List */}
-        <div className="fraud-list-panel">
-          <div className="fraud-list-header">
-            <h3 className="fraud-list-title">Flagged Applications</h3>
-            <div className="fraud-filters">
-              {['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map(level => (
-                <button
-                  key={level}
-                  className={`fraud-filter-btn ${filterLevel === level ? 'active' : ''}`}
-                  onClick={() => setFilterLevel(level)}
+        {/* Left — flagged list */}
+        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid var(--glass-border)' }}>
+            <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-secondary)', marginBottom: '10px' }}>SOLICITUDES MARCADAS</div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {['ALL', 'HIGH', 'MEDIUM'].map(f => (
+                <span
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className="filter-chip"
+                  style={filter === f ? { color: riskColors[f] ?? 'var(--text-primary)', borderColor: riskColors[f] ?? 'var(--text-primary)', background: 'rgba(255,255,255,0.1)' } : {}}
                 >
-                  {level}
-                </button>
+                  {f === 'ALL' ? 'Todas' : f === 'HIGH' ? 'Alto' : 'Medio'}
+                </span>
               ))}
             </div>
           </div>
-          <div className="fraud-list">
-            {filteredApps.map(app => (
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {flagged.length === 0 && (
+              <p style={{ padding: '20px', color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center' }}>Sin solicitudes marcadas.</p>
+            )}
+            {flagged.map(app => (
               <div
-                key={app.id}
-                className={`fraud-list-item ${selectedApp.id === app.id ? 'selected' : ''} ${app.riskLevel.toLowerCase()}`}
-                onClick={() => setSelectedApp(app)}
+                key={app.applicationId}
+                className={`app-item ${selected?.applicationId === app.applicationId ? 'selected' : ''}`}
+                onClick={() => setSelected(app)}
               >
-                <div className="fraud-item-header">
-                  <span className="fraud-item-id">#{app.id}</span>
-                  <span className={`fraud-risk-badge ${app.riskLevel.toLowerCase()}`}>
-                    {app.riskLevel}
+                <div className="app-meta">
+                  <span>#{app.id}</span>
+                  <span>{app.time}</span>
+                </div>
+                <div className="app-name">{app.name}</div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginTop: '4px' }}>
+                  <span className="risk-pill" style={{ color: riskColors[app.riskLevel], borderColor: riskColors[app.riskLevel] }}>
+                    {app.riskLevel === 'HIGH' ? 'Alto' : 'Medio'} · {app.fraudScore}%
+                  </span>
+                  <span style={{ fontSize: '10px', color: statusColors[app.status], textTransform: 'uppercase' }}>
+                    {statusLabel[app.status] ?? app.status}
                   </span>
                 </div>
-                <div className="fraud-item-name">{app.name}</div>
-                <div className="fraud-item-score">
-                  <span className="fraud-score-label">Fraud Score:</span>
-                  <span className="fraud-score-value">{app.fraudScore}%</span>
-                </div>
-                <div className="fraud-item-time">{app.time}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Center Panel - Detailed Analysis */}
-        <div className="fraud-detail-panel">
-          <div className="fraud-detail-header">
+        {/* Center — detail */}
+        {selected ? (
+          <div className="glass-panel" style={{ padding: '24px', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+              <div>
+                <h2 className="chrome-text" style={{ fontSize: '20px', margin: 0 }}>{selected.name}</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '4px 0 0' }}>#{selected.id} · ${selected.loanAmount?.toLocaleString('es-MX')} MXN</p>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '32px', fontWeight: 800, color: riskColors[selected.riskLevel] }}>{selected.fraudScore}%</div>
+                <div style={{ fontSize: '11px', color: riskColors[selected.riskLevel], letterSpacing: '0.08em', fontWeight: 700 }}>{selected.riskLevel === 'HIGH' ? 'ALTO RIESGO' : 'RIESGO MEDIO'}</div>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <div className="card-title-sm" style={{ marginBottom: '12px' }}>Alertas Detectadas</div>
+              {selected.flags.length === 0 ? (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Sin alertas específicas.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {selected.flags.map((flag, i) => (
+                    <div key={i} className="glass-panel" style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ color: riskColors[selected.riskLevel], fontSize: '16px' }}>⚠</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{flag}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div>
-              <h2 className="fraud-detail-name">{selectedApp.name}</h2>
-              <p className="fraud-detail-id">#{selectedApp.id}</p>
-            </div>
-            <div className={`fraud-score-display ${selectedApp.riskLevel.toLowerCase()}`}>
-              <div className="fraud-score-label-large">Fraud Score</div>
-              <div className="fraud-score-value-large">{selectedApp.fraudScore}%</div>
-              <div className={`fraud-risk-level ${selectedApp.riskLevel.toLowerCase()}`}>
-                {selectedApp.riskLevel} RISK
-              </div>
-            </div>
-          </div>
-
-          <div className="fraud-flags-section">
-            <h3 className="fraud-section-title">Detection Flags</h3>
-            <div className="fraud-flags-grid">
-              {selectedApp.flags.map((flag, index) => (
-                <div key={index} className="fraud-flag">
-                  <span className="fraud-flag-icon">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                      <line x1="12" y1="9" x2="12" y2="13"/>
-                      <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                  </span>
-                  {flag}
+              <div className="card-title-sm" style={{ marginBottom: '12px' }}>Información</div>
+              <div className="data-grid-3">
+                <div className="data-cell">
+                  <div className="data-label">Folio</div>
+                  <div className="data-value">#{selected.id}</div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="fraud-analysis-section">
-            <h3 className="fraud-section-title">Detailed Analysis</h3>
-            <div className="fraud-metrics-grid">
-              <div className="fraud-metric">
-                <div className="fraud-metric-label">Identity Confidence</div>
-                <div className="fraud-metric-bar-container">
-                  <div
-                    className={`fraud-metric-bar ${selectedApp.details.identityConfidence > 90 ? 'safe' : selectedApp.details.identityConfidence > 70 ? 'warning' : 'critical'}`}
-                    style={{ width: `${selectedApp.details.identityConfidence}%` }}
-                  ></div>
+                <div className="data-cell">
+                  <div className="data-label">Score Fraude</div>
+                  <div className="data-value" style={{ color: riskColors[selected.riskLevel] }}>{selected.fraudScore}%</div>
                 </div>
-                <div className="fraud-metric-value">{selectedApp.details.identityConfidence}%</div>
-              </div>
-
-              <div className="fraud-metric">
-                <div className="fraud-metric-label">Document Authenticity</div>
-                <div className="fraud-metric-bar-container">
-                  <div
-                    className={`fraud-metric-bar ${selectedApp.details.documentAuthenticity > 90 ? 'safe' : selectedApp.details.documentAuthenticity > 70 ? 'warning' : 'critical'}`}
-                    style={{ width: `${selectedApp.details.documentAuthenticity}%` }}
-                  ></div>
+                <div className="data-cell">
+                  <div className="data-label">Estado</div>
+                  <div className="data-value" style={{ color: statusColors[selected.status] }}>{statusLabel[selected.status] ?? selected.status}</div>
                 </div>
-                <div className="fraud-metric-value">{selectedApp.details.documentAuthenticity}%</div>
-              </div>
-
-              <div className="fraud-metric">
-                <div className="fraud-metric-label">Behavior Score</div>
-                <div className="fraud-metric-bar-container">
-                  <div
-                    className={`fraud-metric-bar ${selectedApp.details.behaviorScore > 80 ? 'safe' : selectedApp.details.behaviorScore > 50 ? 'warning' : 'critical'}`}
-                    style={{ width: `${selectedApp.details.behaviorScore}%` }}
-                  ></div>
+                <div className="data-cell">
+                  <div className="data-label">Monto</div>
+                  <div className="data-value">${selected.loanAmount?.toLocaleString('es-MX')} MXN</div>
                 </div>
-                <div className="fraud-metric-value">{selectedApp.details.behaviorScore}%</div>
-              </div>
-            </div>
-
-            <div className="fraud-checks-grid">
-              <div className="fraud-check">
-                <div className="fraud-check-label">IP Reputation</div>
-                <div className={`fraud-check-value ${selectedApp.details.ipReputation === 'CLEAN' ? 'safe' : selectedApp.details.ipReputation === 'MODERATE' ? 'warning' : 'critical'}`}>
-                  {selectedApp.details.ipReputation}
+                <div className="data-cell">
+                  <div className="data-label">Riesgo</div>
+                  <div className="data-value" style={{ color: riskColors[selected.riskLevel] }}>{selected.riskLevel === 'HIGH' ? 'Alto' : 'Medio'}</div>
                 </div>
-              </div>
-              <div className="fraud-check">
-                <div className="fraud-check-label">Device Fingerprint</div>
-                <div className={`fraud-check-value ${selectedApp.details.deviceFingerprint === 'VERIFIED' ? 'safe' : selectedApp.details.deviceFingerprint === 'KNOWN DEVICE' ? 'warning' : 'critical'}`}>
-                  {selectedApp.details.deviceFingerprint}
-                </div>
-              </div>
-              <div className="fraud-check">
-                <div className="fraud-check-label">Velocity Check</div>
-                <div className={`fraud-check-value ${selectedApp.details.velocityCheck === 'PASSED' ? 'safe' : selectedApp.details.velocityCheck === 'WARNING' ? 'warning' : 'critical'}`}>
-                  {selectedApp.details.velocityCheck}
+                <div className="data-cell">
+                  <div className="data-label">Revisado</div>
+                  <div className="data-value">{selected.time}</div>
                 </div>
               </div>
             </div>
           </div>
-
-          <div className="fraud-actions">
-            <button className="btn btn-reject">Block Application</button>
-            <button className="btn btn-secondary">Request Verification</button>
-            <button className="btn btn-primary">Mark as Reviewed</button>
+        ) : (
+          <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            Selecciona una solicitud para ver el detalle.
           </div>
-        </div>
+        )}
 
-        {/* Right Panel - Patterns & Recent */}
-        <div className="fraud-side-panel">
-          <div className="fraud-patterns-section">
-            <h3 className="fraud-panel-title">Fraud Patterns</h3>
-            <div className="fraud-patterns-list">
-              {fraudPatterns.map((pattern, index) => (
-                <div key={index} className="fraud-pattern-item">
-                  <div className="fraud-pattern-header">
-                    <span className="fraud-pattern-name">{pattern.pattern}</span>
-                    <span className={`fraud-pattern-trend ${pattern.trend}`}>
-                      {pattern.trend === 'up' && (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="12" y1="19" x2="12" y2="5"/>
-                          <polyline points="5 12 12 5 19 12"/>
-                        </svg>
-                      )}
-                      {pattern.trend === 'down' && (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="12" y1="5" x2="12" y2="19"/>
-                          <polyline points="19 12 12 19 5 12"/>
-                        </svg>
-                      )}
-                      {pattern.trend === 'stable' && (
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
-                      )}
-                    </span>
+        {/* Right — patterns + recently blocked */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+          <div className="glass-panel" style={{ padding: '16px' }}>
+            <div className="card-title-sm" style={{ marginBottom: '12px' }}>Reglas más frecuentes</div>
+            {patterns.length === 0 ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Sin datos aún.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {patterns.map((p, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)', flex: 1, marginRight: '8px' }}>{p.pattern}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-primary)', background: 'rgba(255,255,255,0.08)', padding: '2px 8px', borderRadius: '100px' }}>{p.detected}</span>
                   </div>
-                  <div className="fraud-pattern-count">{pattern.detected} detected</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="fraud-blocked-section">
-            <h3 className="fraud-panel-title">Recently Blocked</h3>
-            <div className="fraud-blocked-list">
-              {recentBlocked.map((blocked, index) => (
-                <div key={index} className="fraud-blocked-item">
-                  <div className="fraud-blocked-header">
-                    <span className="fraud-blocked-id">#{blocked.id}</span>
-                    <span className="fraud-blocked-time">{blocked.time}</span>
+          <div className="glass-panel" style={{ padding: '16px' }}>
+            <div className="card-title-sm" style={{ marginBottom: '12px' }}>Rechazadas (Alto Riesgo)</div>
+            {blocked.length === 0 ? (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Ninguna aún.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {blocked.map((b, i) => (
+                  <div key={i} style={{ borderBottom: '1px solid var(--glass-border)', paddingBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '12px', fontWeight: 700, color: '#f87171' }}>#{b.id}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{b.time}</span>
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{b.name}</div>
+                    <div style={{ fontSize: '11px', color: '#f87171', marginTop: '2px' }}>Score: {b.score}%</div>
                   </div>
-                  <div className="fraud-blocked-reason">{blocked.reason}</div>
-                  <div className="fraud-blocked-score">Score: {blocked.score}%</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

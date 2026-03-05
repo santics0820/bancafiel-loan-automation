@@ -127,7 +127,7 @@ Transform a 1-week manual loan process into a 2-hour automated system using ente
 ### Automated Workflow (Under 2 Hours)
 
 1. Customer submits via web app (5 min)
-2. **AWS Textract** extracts data from documents (30 sec)
+2. **Claude Sonnet 4.5 on Bedrock** extracts data from documents (30 sec)
 3. **AWS Lambda** validates against database (10 sec)
 4. **AWS Fraud Detector** checks fraud patterns (10 sec)
 5. **Step Functions** routes to analyst by risk level (instant)
@@ -140,7 +140,7 @@ Transform a 1-week manual loan process into a 2-hour automated system using ente
 
 | Service | Purpose | Impact |
 |---------|---------|--------|
-| **Textract** | AI document reader | 95-99% accuracy on Mexican IDs. 10 min → 30 sec |
+| **Bedrock OCR (Claude Sonnet 4.5)** | AI document reader | 95-99% accuracy on Mexican IDs. 10 min → 30 sec |
 | **Lambda** | Serverless processing | Auto-triggered functions. $0.20 per 1M requests |
 | **RDS** | Customer database | Replaces Excel. Millions of records |
 | **Fraud Detector** | AI fraud prevention | 2% → 0.6% fraud rate (saves $198k/month) |
@@ -154,7 +154,7 @@ Transform a 1-week manual loan process into a 2-hour automated system using ente
 ```
 Customer → Web App → API → Lambda Functions
                               ↓
-           [S3] [Textract] [RDS] [Fraud Detector]
+           [S3] [Bedrock OCR (Claude Sonnet 4.5)] [RDS] [Fraud Detector]
                               ↓
                       Step Functions
                               ↓
@@ -183,7 +183,7 @@ Customer → Web App → API → Lambda Functions
 
 | Service | Monthly Cost |
 |---------|-------------|
-| Textract (45k pages) | $135 |
+| Bedrock OCR (Claude Sonnet 4.5) (45k pages) | $135 |
 | RDS (db.t3.small) | $36 |
 | Fraud Detector | $23 |
 | CloudWatch | $15 |
@@ -219,7 +219,7 @@ Customer → Web App → API → Lambda Functions
 | Week | Focus | Deliverable |
 |------|-------|-------------|
 | **1** | Foundation: AWS setup, RDS/S3/Cognito, basic React app, first Lambda | Upload document → see extracted data |
-| **2** | Intelligence: Textract integration, test 50+ Mexican docs, fraud detection | Complete extraction + validation + fraud pipeline |
+| **2** | Intelligence: Bedrock OCR (Claude Sonnet 4.5) integration, test 50+ Mexican docs, fraud detection | Complete extraction + validation + fraud pipeline |
 | **3** | Workflow: Step Functions, approval dashboard, email notifications | End-to-end workflow working |
 | **4** | Polish: CloudWatch monitoring, testing (100+ apps), demo practice | Working demo ready for KPMG |
 
@@ -235,7 +235,7 @@ Customer → Web App → API → Lambda Functions
 
 | Risk | Mitigation |
 |------|------------|
-| Textract accuracy low | Test 100+ Mexican docs Week 2. Add manual verification if <90% |
+| Bedrock OCR (Claude Sonnet 4.5) accuracy low | Test 100+ Mexican docs Week 2. Add manual verification if <90% |
 | Team availability | Agile approach, redistribute tasks |
 | AWS costs exceed free tier | Monitor daily, use student credits, pool $20-30 if needed |
 | Demo failure | Record backup video, have screenshot slides |
@@ -284,14 +284,14 @@ Customer → Web App → API → Lambda Functions
 4. **Professional Approach** - Humans control credit decisions, comprehensive plan
 5. **Complete Solution** - Technology + change management + implementation
 
-### Our Secret Weapon: Amazon Textract
+### Our Secret Weapon: Claude Sonnet 4.5 on Amazon Bedrock
 
 **vs. Low-Code Tools:**
 - Most teams: N8N, Zapier, Airtable ($30k-75k/month for 15k apps)
 - Us: Enterprise AI ($300/month)
 - **100x cheaper + enterprise-grade**
 
-Textract handles Mexican IDs with 95-99% accuracy - purpose-built for document extraction.
+Bedrock OCR (Claude Sonnet 4.5) handles Mexican IDs with 95-99% accuracy - purpose-built for document extraction.
 
 <div style="page-break-after: always;"></div>
 
@@ -322,7 +322,7 @@ Textract handles Mexican IDs with 95-99% accuracy - purpose-built for document e
 
 ### AWS Services Simplified
 
-- **Textract** = AI reads PDFs (like Google Lens++)
+- **Bedrock OCR (Claude Sonnet 4.5)** = AI reads PDFs (like Google Lens++)
 - **Lambda** = Auto-triggered code (cloud Excel macros)
 - **RDS** = Database (Excel for millions of rows)
 - **S3** = Cloud storage (Google Drive for apps)
