@@ -1,0 +1,12 @@
+{
+  "document_type": "INCOME_PROOF",
+  "fields": {
+    "employer_name": { "value": "ACME SA DE CV", "confidence": 98.0 },
+    "rfc": { "value": "XAXX010101000", "confidence": 97.0 },
+    "payment_frequency": { "value": "QUINCENAL", "confidence": 95.0 },
+    "period_start": { "value": "01/02/2026", "confidence": 96.0 },
+    "period_end": { "value": "15/02/2026", "confidence": 96.0 },
+    "net_income": { "value": "8500.50", "confidence": 94.0 },
+    "gross_income": { "value": "10000.00", "confidence": 93.0 }
+  }
+}

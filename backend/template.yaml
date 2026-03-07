@@ -238,7 +238,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub bancafiel-textract-done-${Environment}
-      DisplayName: BancaFiel Textract Completion
+      DisplayName: BancaFiel Document Processing (legacy, unused)
 
   ApproverNotificationTopic:
     Type: AWS::SNS::Topic
@@ -247,21 +247,22 @@ Resources:
       DisplayName: BancaFiel Approver Notifications
 
   # ============================================
-  # IAM ROLE - Textract can publish to SNS
+  # IAM ROLE - Legacy (kept to avoid stack drift, no longer used)
+  # Document processing now uses Bedrock directly in processDocument Lambda
   # ============================================
   TextractSNSRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub bancafiel-textract-sns-role-${Environment}
+      RoleName: !Sub bancafiel-legacy-doc-role-${Environment}
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
-              Service: textract.amazonaws.com
+              Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: TextractPublishSNS
+        - PolicyName: LegacyDocProcessingPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -281,8 +282,6 @@ Resources:
       CompatibleRuntimes:
         - python3.13
       RetentionPolicy: Retain
-    Metadata:
-      BuildMethod: python3.13
 
   # ============================================
   # API GATEWAY
@@ -309,11 +308,12 @@ Resources:
       FunctionName: !Sub bancafiel-processDocument-${Environment}
       CodeUri: src/lambdas/document-processor/
       Handler: handler.handler
-      Description: Receives S3 upload, starts Textract job, saves document metadata
+      Description: Receives S3 upload, extracts document data via Claude Sonnet 4.5 on Bedrock, saves to DB
+      Timeout: 120
       Environment:
         Variables:
-          TEXTRACT_SNS_TOPIC_ARN: !Ref TextractCompletionTopic
-          TEXTRACT_ROLE_ARN: !GetAtt TextractSNSRole.Arn
+          VALIDATE_DATA_FUNCTION: !Sub bancafiel-validateData-${Environment}
+          BEDROCK_MODEL_ID: us.anthropic.claude-sonnet-4-5-20250929-v1:0
       Policies:
         - Statement:
             - Effect: Allow
@@ -323,12 +323,15 @@ Resources:
               Resource: !Sub "arn:aws:s3:::bancafiel-incoming-${AWS::AccountId}-${Environment}/*"
             - Effect: Allow
               Action:
-                - textract:StartDocumentTextDetection
-                - textract:StartDocumentAnalysis
-              Resource: '*'
+                - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
+                - bedrock:Converse
+              Resource:
+                - "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-5-20250929-v1:0"
+                - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/us.anthropic.claude-sonnet-4-5-20250929-v1:0"
             - Effect: Allow
-              Action: iam:PassRole
-              Resource: !GetAtt TextractSNSRole.Arn
+              Action: lambda:InvokeFunction
+              Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-validateData-${Environment}
       Events:
         # SAM automatically handles the circular dependency here
         S3Upload:
@@ -339,7 +342,9 @@ Resources:
 
   # ============================================
   # LAMBDA #2: extractData
-  # Triggered by: SNS (Textract completion)
+  # Triggered by: processDocument (direct async invoke)
+  # Note: Data extraction now happens in processDocument via Bedrock.
+  # This Lambda verifies the document and triggers validateData.
   # ============================================
   ExtractDataFunction:
     Type: AWS::Serverless::Function
@@ -347,26 +352,16 @@ Resources:
       FunctionName: !Sub bancafiel-extractData-${Environment}
       CodeUri: src/lambdas/data-extractor/
       Handler: handler.handler
-      Description: Gets Textract results, extracts structured fields, saves to DB
-      Timeout: 60
+      Description: Verifies Bedrock extraction results and triggers validateData
+      Timeout: 30
       Environment:
         Variables:
           VALIDATE_DATA_FUNCTION: !Sub bancafiel-validateData-${Environment}
       Policies:
         - Statement:
             - Effect: Allow
-              Action:
-                - textract:GetDocumentTextDetection
-                - textract:GetDocumentAnalysis
-              Resource: '*'
-            - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-validateData-${Environment}
-      Events:
-        TextractDone:
-          Type: SNS
-          Properties:
-            Topic: !Ref TextractCompletionTopic
 
   # ============================================
   # LAMBDA #3: validateData
@@ -382,11 +377,15 @@ Resources:
       Environment:
         Variables:
           DETECT_FRAUD_FUNCTION: !Sub bancafiel-detectFraud-${Environment}
+          SENDER_EMAIL: 'noreply@bancafiel.com'
       Policies:
         - Statement:
             - Effect: Allow
               Action: lambda:InvokeFunction
               Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-detectFraud-${Environment}
+            - Effect: Allow
+              Action: ses:SendEmail
+              Resource: '*'
 
   # ============================================
   # LAMBDA #4: detectFraud
@@ -400,6 +399,9 @@ Resources:
       Handler: handler.handler
       Description: Runs AWS Fraud Detector, scores risk, updates application
       Timeout: 60
+      Environment:
+        Variables:
+          LOAN_WORKFLOW_ARN: !Ref LoanWorkflow
       Policies:
         - Statement:
             - Effect: Allow
@@ -407,6 +409,10 @@ Resources:
                 - frauddetector:GetEventPrediction
                 - frauddetector:CreateEvent
               Resource: '*'
+            - Effect: Allow
+              Action:
+                - states:StartExecution
+              Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:bancafiel-loan-workflow-${Environment}"
 
   # ============================================
   # LAMBDA #5: approvalNotifier
@@ -421,13 +427,17 @@ Resources:
       Description: Notifies approver via SNS, stores Step Functions task token
       Environment:
         Variables:
-          APPROVER_SNS_TOPIC_ARN: !Ref ApproverNotificationTopic
+          APPROVER_EMAIL: 'santics@outlook.com'
+          SENDER_EMAIL: 'noreply@bancafiel.com'
           FRONTEND_URL: 'https://bancafiel.com'
       Policies:
         - Statement:
             - Effect: Allow
-              Action: sns:Publish
-              Resource: !Ref ApproverNotificationTopic
+              Action: ses:SendEmail
+              Resource: '*'
+            - Effect: Allow
+              Action: states:SendTaskSuccess
+              Resource: !Sub "arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:bancafiel-loan-workflow-${Environment}"
       Events:
         # Expose approval/reject via API Gateway
         ApproveApplication:
@@ -552,6 +562,51 @@ Resources:
             RestApiId: !Ref BancaFielAPI
             Path: /api/loans
             Method: POST
+
+  AuthRegisterFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-authRegister-${Environment}
+      CodeUri: src/api/routes/
+      Handler: auth.register
+      Description: POST /api/auth/register - Create client account
+      Events:
+        Register:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/auth/register
+            Method: POST
+
+  AuthLoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-authLogin-${Environment}
+      CodeUri: src/api/routes/
+      Handler: auth.login
+      Description: POST /api/auth/login - Verify credentials
+      Events:
+        Login:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/auth/login
+            Method: POST
+
+  GetApplicationStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-getApplicationStatus-${Environment}
+      CodeUri: src/api/routes/
+      Handler: applications.get_application_status
+      Description: GET /api/loans/status - Client folio status lookup
+      Events:
+        GetStatus:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/loans/status
+            Method: GET
 
   GetFraudDataFunction:
     Type: AWS::Serverless::Function
@@ -808,8 +863,8 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-WorkflowArn
 
-  TextractTopicArn:
-    Description: SNS topic for Textract completion
+  DocumentProcessingTopicArn:
+    Description: SNS topic (legacy, document processing now uses Bedrock directly)
     Value: !Ref TextractCompletionTopic
 
   ApproverTopicArn:

@@ -1,0 +1,15 @@
+{
+  "document_type": "BANK_STATEMENT",
+  "fields": {
+    "bank_name": { "value": "BANCO EJEMPLO", "confidence": 98.0 },
+    "clabe": { "value": "012345678901234567", "confidence": 97.5 },
+    "account_number": { "value": "1234567890", "confidence": 96.0 },
+    "rfc": { "value": "ABCD010203ABC", "confidence": 95.0 },
+    "period_start": { "value": "01/01/2026", "confidence": 94.0 },
+    "period_end": { "value": "31/01/2026", "confidence": 94.0 },
+    "balance": { "value": "12345.67", "confidence": 93.0 },
+    "average_balance": { "value": "10000.00", "confidence": 92.0 },
+    "total_deposits": { "value": "25000.00", "confidence": 91.0 },
+    "total_withdrawals": { "value": "5000.00", "confidence": 90.0 }
+  }
+}

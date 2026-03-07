@@ -24,6 +24,7 @@ const INEScanner = ({ onCapture, onBack }) => {
   const webcamRef                     = useRef(null);
   const [capturedImg, setCapturedImg] = useState(null);
   const [mode, setMode]               = useState('card-front');
+  const [frontImg, setFrontImg]       = useState(null);
 
   const isCardMode = mode !== 'face';
   const stepIndex  = STEPS.findIndex(s => s.key === mode);
@@ -63,12 +64,46 @@ const INEScanner = ({ onCapture, onBack }) => {
     img.src = screenshot;
   }, [isCardMode]);
 
+  const combineFrontBack = (frontDataUrl, backDataUrl) => {
+    return new Promise((resolve) => {
+      const front = new Image();
+      const back  = new Image();
+      front.onload = () => {
+        back.onload = () => {
+          const canvas = document.createElement('canvas');
+          const gap    = 20;
+          canvas.width  = Math.max(front.width, back.width);
+          canvas.height = front.height + gap + back.height;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(front, 0, 0);
+          ctx.drawImage(back,  0, front.height + gap);
+          canvas.toBlob((blob) => resolve(blob), 'image/jpeg', 0.95);
+        };
+        back.src = backDataUrl;
+      };
+      front.src = frontDataUrl;
+    });
+  };
+
   const confirm = () => {
-    if (onCapture) onCapture(capturedImg, mode);
-    setCapturedImg(null);
-    if (mode === 'card-front')     setMode('card-back');
-    else if (mode === 'card-back') setMode('face');
-    // en 'face' no cambiamos modo — ClientPortal cierra el scanner
+    if (mode === 'card-front') {
+      setFrontImg(capturedImg);
+      setCapturedImg(null);
+      setMode('card-back');
+    } else if (mode === 'card-back') {
+      // Combine front + back into one JPEG blob and pass to parent
+      combineFrontBack(frontImg, capturedImg).then((blob) => {
+        if (onCapture) onCapture(blob, 'card-combined');
+      });
+      setCapturedImg(null);
+      setMode('face');
+    } else if (mode === 'face') {
+      // Selfie — just advance, no image sent to Bedrock
+      if (onCapture) onCapture(null, 'face');
+      setCapturedImg(null);
+    }
   };
 
   const retake = () => setCapturedImg(null);

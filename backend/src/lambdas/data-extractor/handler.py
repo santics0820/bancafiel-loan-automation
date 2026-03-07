@@ -1,36 +1,37 @@
 """
 Lambda #2: Extract Data
-Triggered by SNS (from Textract) → Extracts structured data from documents
+Now a lightweight pass-through — data extraction is performed directly in processDocument
+using Claude Sonnet 4.5 on Amazon Bedrock. This Lambda triggers validateData.
 """
 import json
 import boto3
-import re
-from datetime import datetime
+import os
 
 try:
     from utils.logger import setup_logger, log_event, log_error
-    from utils.database import execute_insert, execute_query_single
+    from utils.database import execute_query_single
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)
     def setup_logger(name):
         return logger
+    def log_event(logger, event_type, data):
+        logger.info(f"{event_type}: {data}")
+    def log_error(logger, error_type, error, context=None):
+        logger.error(f"{error_type}: {error}")
 
 logger = setup_logger(__name__)
-textract_client = boto3.client('textract')
 lambda_client = boto3.client('lambda')
 
 
 def handler(event, context):
     """
-    Extract data from Textract results.
+    Pass-through Lambda — invoked by processDocument after Bedrock extraction.
 
-    Event: SNS notification from Textract completion
+    Event: {document_id, application_id}
     Actions:
-        1. Get Textract results
-        2. Parse and extract structured data
-        3. Save to database
-        4. Trigger next Lambda (validateData)
+        1. Verify document exists in DB
+        2. Trigger validateData Lambda
 
     Returns:
         dict: Success/error response
@@ -38,98 +39,50 @@ def handler(event, context):
     try:
         log_event(logger, 'lambda_invoked', {
             'function': 'extractData',
-            'event_type': 'SNS from Textract'
+            'event_type': 'direct invoke from processDocument'
         })
 
-        # Parse SNS message
-        sns_record = event['Records'][0]['Sns']
-        message = json.loads(sns_record['Message'])
+        document_id = event.get('document_id')
+        application_id = event.get('application_id')
 
-        job_id = message.get('JobId')
-        status = message.get('Status')
-
-        log_event(logger, 'textract_notification_received', {
-            'job_id': job_id,
-            'status': status
-        })
-
-        if status != 'SUCCEEDED':
-            logger.error(f'Textract job {job_id} failed with status: {status}')
+        if not document_id or not application_id:
             return {
                 'statusCode': 400,
-                'body': json.dumps({'error': f'Textract job failed: {status}'})
+                'body': json.dumps({'error': 'Missing document_id or application_id'})
             }
 
-        # Get document info from database
-        doc_query = "SELECT * FROM documents WHERE textract_job_id = %s"
-        document = execute_query_single(doc_query, (job_id,))
+        # Verify document exists
+        document = execute_query_single(
+            "SELECT id, document_type, textract_status FROM documents WHERE id = %s",
+            (document_id,)
+        )
 
         if not document:
-            logger.error(f'Document not found for Textract job {job_id}')
             return {
                 'statusCode': 404,
                 'body': json.dumps({'error': 'Document not found'})
             }
 
-        document_id = str(document['id'])
-        application_id = str(document['application_id'])
-
-        # Get Textract results
-        textract_results = get_textract_results(job_id)
-
-        # Parse blocks and extract structured data
-        extracted_fields = parse_textract_blocks(textract_results, document['document_type'])
-
-        log_event(logger, 'data_extracted', {
-            'job_id': job_id,
+        log_event(logger, 'document_verified', {
             'document_id': document_id,
-            'fields_count': len(extracted_fields)
+            'document_type': document['document_type'],
+            'status': document['textract_status']
         })
 
-        # Save extracted data to database
-        for field_name, field_data in extracted_fields.items():
-            query = """
-                INSERT INTO extracted_data
-                (document_id, field_name, field_value, confidence, extracted_at)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (document_id, field_name)
-                DO UPDATE SET
-                    field_value = EXCLUDED.field_value,
-                    confidence = EXCLUDED.confidence,
-                    extracted_at = EXCLUDED.extracted_at
-            """
-            execute_insert(query, (
-                document_id,
-                field_name,
-                field_data['value'],
-                field_data['confidence'],
-                datetime.utcnow()
-            ))
-
-        # Update document status
-        update_query = """
-            UPDATE documents
-            SET textract_status = %s, processed_at = %s
-            WHERE id = %s
-        """
-        execute_insert(update_query, ('SUCCEEDED', datetime.utcnow(), document_id))
-
-        # Trigger next Lambda (validateData)
+        # Trigger validateData Lambda
         try:
-            validate_payload = {
-                'document_id': document_id,
-                'application_id': application_id
-            }
-
             lambda_client.invoke(
-                FunctionName='bancafiel-validateData-dev',  # TODO: Get from environment
-                InvocationType='Event',  # Async
-                Payload=json.dumps(validate_payload)
+                FunctionName=os.environ.get('VALIDATE_DATA_FUNCTION', 'bancafiel-validateData-dev'),
+                InvocationType='Event',
+                Payload=json.dumps({
+                    'document_id': document_id,
+                    'application_id': application_id
+                })
             )
 
-            log_event(logger, 'triggered_next_lambda', {
-                'next_function': 'validateData',
-                'application_id': application_id
+            log_event(logger, 'triggered_validate_data', {
+                'application_id': application_id,
+                'document_id': document_id
             })
 
         except Exception as e:
@@ -138,9 +91,9 @@ def handler(event, context):
         return {
             'statusCode': 200,
             'body': json.dumps({
-                'message': 'Data extraction complete',
+                'message': 'Data extraction verified, validation triggered',
                 'document_id': document_id,
-                'fields_extracted': len(extracted_fields)
+                'application_id': application_id
             })
         }
 
@@ -148,165 +101,5 @@ def handler(event, context):
         log_error(logger, 'handler_error', e)
         return {
             'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': 'Internal server error'})
         }
-
-
-def get_textract_results(job_id):
-    """
-    Get complete Textract results (handles pagination).
-
-    Args:
-        job_id (str): Textract job ID
-
-    Returns:
-        list: List of all blocks from Textract
-    """
-    blocks = []
-    next_token = None
-
-    while True:
-        if next_token:
-            response = textract_client.get_document_text_detection(
-                JobId=job_id,
-                NextToken=next_token
-            )
-        else:
-            response = textract_client.get_document_text_detection(JobId=job_id)
-
-        blocks.extend(response.get('Blocks', []))
-
-        next_token = response.get('NextToken')
-        if not next_token:
-            break
-
-    return blocks
-
-
-def parse_textract_blocks(blocks, document_type):
-    """
-    Parse Textract blocks into structured fields.
-
-    Args:
-        blocks (list): Textract blocks
-        document_type (str): Type of document
-
-    Returns:
-        dict: Extracted fields with confidence scores
-    """
-    fields = {}
-
-    # Extract text from all LINE blocks
-    lines = [
-        {'text': block['Text'], 'confidence': block['Confidence']}
-        for block in blocks
-        if block['BlockType'] == 'LINE'
-    ]
-
-    if document_type == 'INE':
-        fields = extract_ine_fields(lines)
-    elif document_type == 'PROOF_OF_ADDRESS':
-        fields = extract_address_fields(lines)
-    elif document_type == 'BANK_STATEMENT':
-        fields = extract_bank_statement_fields(lines)
-    elif document_type == 'INCOME_PROOF':
-        fields = extract_income_fields(lines)
-
-    return fields
-
-
-def extract_ine_fields(lines):
-    """Extract fields from Mexican INE/IFE document"""
-    fields = {}
-    full_text = ' '.join([line['text'] for line in lines])
-
-    for line in lines:
-        text = line['text'].upper()
-        confidence = line['confidence']
-
-        # Extract CURP (18-character Mexican ID)
-        if 'CURP' in text:
-            curp = extract_curp(text)
-            if curp:
-                fields['curp'] = {'value': curp, 'confidence': confidence}
-
-        # Extract name
-        if 'NOMBRE' in text:
-            name = extract_after_label(text, 'NOMBRE')
-            if name:
-                fields['full_name'] = {'value': name, 'confidence': confidence}
-
-        # Extract address
-        if 'DOMICILIO' in text or 'DIRECCIÓN' in text:
-            address = extract_after_label(text, ['DOMICILIO', 'DIRECCIÓN'])
-            if address:
-                fields['address'] = {'value': address, 'confidence': confidence}
-
-        # Extract date of birth
-        if 'FECHA' in text and 'NACIMIENTO' in text:
-            dob = extract_date(text)
-            if dob:
-                fields['date_of_birth'] = {'value': dob, 'confidence': confidence}
-
-    return fields
-
-
-def extract_address_fields(lines):
-    """Extract address from proof of address document"""
-    fields = {}
-
-    # Look for address patterns
-    for line in lines:
-        text = line['text']
-
-        # Look for common address indicators
-        if any(word in text.upper() for word in ['CALLE', 'AV', 'AVENIDA', 'COLONIA']):
-            fields['address'] = {
-                'value': text,
-                'confidence': line['confidence']
-            }
-            break
-
-    return fields
-
-
-def extract_bank_statement_fields(lines):
-    """Extract data from bank statement"""
-    fields = {}
-    # TODO: Implement bank statement parsing
-    return fields
-
-
-def extract_income_fields(lines):
-    """Extract income information"""
-    fields = {}
-    # TODO: Implement income proof parsing
-    return fields
-
-
-def extract_curp(text):
-    """Extract CURP using regex (18-character Mexican ID)"""
-    pattern = r'[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d'
-    match = re.search(pattern, text)
-    return match.group(0) if match else None
-
-
-def extract_after_label(text, labels):
-    """Extract text after a label"""
-    if isinstance(labels, str):
-        labels = [labels]
-
-    for label in labels:
-        if label in text:
-            parts = text.split(label)
-            if len(parts) > 1:
-                return parts[1].strip()
-
-    return None
-
-
-def extract_date(text):
-    """Extract date from text (DD/MM/YYYY or DD-MM-YYYY)"""
-    pattern = r'\d{2}[/-]\d{2}[/-]\d{4}'
-    match = re.search(pattern, text)
-    return match.group(0) if match else None

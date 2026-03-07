@@ -54,7 +54,7 @@
 
 #### Key Differentiators (0.75 pages)
 - Why we'll win (5 points)
-- Secret weapon: Amazon Textract
+- Secret weapon: Claude Sonnet 4.5 on Amazon Bedrock
 - **Estimated: 0.75 pages**
 
 #### Why Act Now (0.5 pages)

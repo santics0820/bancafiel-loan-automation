@@ -25,9 +25,9 @@ SAM is installed at `/Users/santiagocairesanchez/Library/Python/3.13/bin/sam` vi
 
 ```
 S3 upload (incoming bucket)
-  └─► [1] processDocument  — starts Textract job, saves document metadata to DB
-        └─► SNS: bancafiel-textract-done-{env}
-              └─► [2] extractData  — gets Textract results, structures fields, saves to DB
+  └─► [1] processDocument  — downloads doc from S3, runs OCR via Claude Sonnet 4.5 (Bedrock), saves to DB
+        └─► async invoke (Bedrock extraction complete)
+              └─► [2] extractData  — verifies Bedrock extraction, triggers validateData
                     └─► async invoke
                           └─► [3] validateData  — validates fields, links customer by CURP
                                 └─► async invoke
@@ -109,17 +109,18 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 |---|---|---|---|---|
 | `detectFraud` | Ricardo | `tests/unit/test_fraud_detector.py` | 83% | ✅ Done — merged to dev |
 | `approvalNotifier` | Ricardo | `tests/unit/test_approval_notifier.py` | 83% | ✅ Done — merged to dev |
-| `notificationSender` | Lizet | — | 0% | 🔲 Pending |
-| `erpUpdater` | Lizet | — | 0% | 🔲 Pending |
+| `notificationSender` | Lizet | `tests/unit/test_notification_sender.py` | ✅ | ✅ Done — merged to dev |
+| `erpUpdater` | Lizet | `tests/unit/test_erp_updater.py` | ✅ | ✅ Done — merged to dev |
 | `processDocument` | Montse | — | 0% | 🔲 Pending |
 | `validateData` | Montse | — | 0% | 🔲 Pending |
 | `extractData` | Montse | — | 0% | 🔲 Pending (OCR parsers also pending) |
 
 **Other open items:**
-- Health endpoint bug — `execute_query_single` not imported in `health.py` (Lizet)
-- Analytics tests (Lizet)
+- ~~Health endpoint bug~~ — fixed by Lizet ✅
+- ~~Analytics tests~~ — done by Lizet ✅
 - AWS Fraud Detector not yet configured in console (Santiago)
-- SES sender `noreply@bancafiel.com` not yet verified (Santiago)
+- ~~SES sender~~ — `bancafiel.noreply@gmail.com` verified in us-east-1 ✅ (dev)
+- Frontend API wiring — Fernando 🔲 see `docs/technical/FRONTEND_WIRING.md`
 
 ---
 
@@ -139,7 +140,7 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 | Person | GitHub | Role | Owns |
 |---|---|---|---|
 | **Santiago** | `santics0820` | Backend lead + AWS admin | Architecture, infrastructure, PR reviews, deploys |
-| **Fernando** | `nitrofgm` | Frontend lead | React app (`frontend/`), UI components, API wiring in Week 3 |
+| **Fernando** | `nitrofgm` | Frontend lead | React app (`frontend/`), UI components, API wiring — see `docs/technical/FRONTEND_WIRING.md` |
 | **Ricardo** | `ricfranco05` | Backend contributor | Fraud & Approval pipeline — `detectFraud`, `approvalNotifier`, their tests, Step Functions verification |
 | **Lizet** | `lizetpinae-ux` | Backend contributor | Customer communications — `notificationSender`, `erpUpdater`, their tests, health endpoint fix, analytics tests |
 | **Montse** | `Mon500` | Backend contributor | Document intelligence — `extractData` OCR parsers (bank statement + income), `processDocument` + `validateData` tests |

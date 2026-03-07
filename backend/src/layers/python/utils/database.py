@@ -40,8 +40,8 @@ def execute_query(query, params=None):
     """Execute a SELECT and return list of dicts."""
     conn = _connect()
     try:
-        q = _convert_placeholders(query)
-        rows = conn.run(q, *_pg_params(params))
+        q, kwargs = _prepare(query, params)
+        rows = conn.run(q, **kwargs)
         return _rows_to_dicts(conn, rows)
     except Exception as e:
         logger.error(f"Query error: {e}")
@@ -60,9 +60,8 @@ def execute_insert(query, params=None):
     """Execute INSERT/UPDATE/DELETE — returns RETURNING rows or row count."""
     conn = _connect()
     try:
-        q = _convert_placeholders(query)
-        rows = conn.run(q, *_pg_params(params))
-        conn.commit()
+        q, kwargs = _prepare(query, params)
+        rows = conn.run(q, **kwargs)
         if rows is not None and conn.columns:
             return _rows_to_dicts(conn, rows)
         return conn.row_count
@@ -74,7 +73,7 @@ def execute_insert(query, params=None):
 
 
 def _pg_params(params):
-    """Normalise params to a flat list for pg8000 positional args."""
+    """Normalise params to a flat list."""
     if params is None:
         return []
     if isinstance(params, (list, tuple)):
@@ -82,11 +81,30 @@ def _pg_params(params):
     return [params]
 
 
+def _prepare(query, params):
+    """
+    Convert %s or $N placeholders → :p1, :p2 … (pg8000 native named style)
+    and build the matching kwargs dict {p1: val1, p2: val2, …}.
+    """
+    import re
+    values = _pg_params(params)
+
+    # Replace %s sequentially → :p1, :p2, …
+    counter = [0]
+    def next_placeholder(_):
+        counter[0] += 1
+        return f':p{counter[0]}'
+    q = re.sub(r'%s', next_placeholder, query)
+
+    # Also replace any pre-existing $1/$2 style → :p1/:p2
+    q = re.sub(r'\$(\d+)', lambda m: f':p{m.group(1)}', q)
+
+    kwargs = {f'p{n+1}': v for n, v in enumerate(values)}
+    return q, kwargs
+
+
 def _convert_placeholders(query):
-    """
-    Convert %s placeholders → $1, $2 … so callers can write
-    standard-looking SQL and pg8000 stays happy.
-    """
+    """Legacy helper kept for compatibility."""
     count = 0
     out = []
     i = 0

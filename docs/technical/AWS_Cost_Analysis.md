@@ -25,7 +25,7 @@
 
 ## Detailed AWS Cost Breakdown (Production)
 
-### 1. Amazon Textract - Document Processing
+### 1. Claude Sonnet 4.5 on Amazon Bedrock - Document Processing
 **Usage:**
 - 15,000 applications × 6 pages = 90,000 pages/month
 
@@ -235,7 +235,7 @@
 | Scenario | Services Included | Monthly Cost |
 |----------|------------------|--------------|
 | **Minimal** | S3, Lambda, RDS, API Gateway, Cognito, SES, CloudWatch | **$60-80** |
-| **Standard** | + Step Functions, Textract (basic), SNS | **$200-250** |
+| **Standard** | + Step Functions, Bedrock OCR (Claude Sonnet 4.5) (basic), SNS | **$200-250** |
 | **Recommended** | + Fraud Detector (optimized 20%), better RDS | **$280-350** |
 | **Premium** | + QuickSight, Fraud Detector (100%), enhanced monitoring | **$450-550** |
 
@@ -246,7 +246,7 @@
 ### **Recommended Production Configuration: $280-350/month**
 
 **Breakdown:**
-- Amazon Textract: **$135** (document extraction)
+- Claude Sonnet 4.5 on Amazon Bedrock: **$135** (document extraction)
 - Amazon RDS (db.t3.small): **$36** (database)
 - Amazon Fraud Detector (20% of apps): **$23** (fraud prevention)
 - AWS Lambda: **$2** (compute)
@@ -309,7 +309,7 @@
 
 With optimizations:
 - RDS Reserved Instance: $28/month
-- Textract optimized: $135/month
+- Bedrock OCR (Claude Sonnet 4.5) optimized: $135/month
 - Fraud Detector (20% batch): $5/month
 - S3 with lifecycle: $6/month
 - CloudWatch reduced: $10/month

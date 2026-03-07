@@ -6,7 +6,7 @@ import json
 import boto3
 import re
 import os
-from datetime import datetime
+from datetime import datetime, UTC
 
 try:
     from utils.logger import setup_logger, log_event, log_error
@@ -19,6 +19,7 @@ except ImportError:
 
 logger = setup_logger(__name__)
 lambda_client = boto3.client('lambda')
+ses_client = boto3.client('ses', region_name='us-east-1')
 
 
 def handler(event, context):
@@ -46,6 +47,8 @@ def handler(event, context):
         # 1. CURP format validation
         curp = data.get('curp')
         if curp:
+            curp = curp.strip().upper()[:18]  # normalize: strip spaces, uppercase, max 18 chars
+        if curp:
             if not validate_curp(curp):
                 validation['is_valid'] = False
                 validation['errors'].append('Invalid CURP format')
@@ -68,15 +71,35 @@ def handler(event, context):
                 if data.get('full_name') and not names_similar(existing['full_name'], data['full_name']):
                     validation['warnings'].append(f"Name mismatch: DB has '{existing['full_name']}', document has '{data['full_name']}'")
             else:
-                # Create new customer from extracted data
+                # Get email/phone saved from the application form
+                app_record = execute_query_single(
+                    "SELECT applicant_email, applicant_phone FROM applications WHERE id = %s",
+                    (application_id,)
+                ) if application_id else None
+                applicant_email = app_record['applicant_email'] if app_record else None
+                applicant_phone = app_record['applicant_phone'] if app_record else None
+
+                # Parse date_of_birth — Claude returns DD/MM/YYYY, PostgreSQL needs YYYY-MM-DD
+                dob_raw = data.get('date_of_birth')
+                dob = None
+                if dob_raw:
+                    try:
+                        from datetime import datetime as dt
+                        dob = dt.strptime(dob_raw.strip(), '%d/%m/%Y').date().isoformat()
+                    except Exception:
+                        dob = None
+
+                # Create new customer from extracted data + form data
                 result = execute_query("""
-                    INSERT INTO customers (full_name, curp, address, date_of_birth)
-                    VALUES (%s, %s, %s, %s) RETURNING id
+                    INSERT INTO customers (full_name, curp, email, phone, address, date_of_birth)
+                    VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
                 """, (
                     data.get('full_name', 'Unknown'),
                     curp,
+                    applicant_email,
+                    applicant_phone,
                     data.get('address'),
-                    data.get('date_of_birth')
+                    dob
                 ))
                 customer_id = str(result[0]['id'])
                 log_event(logger, 'new_customer_created', {'customer_id': customer_id, 'curp': curp})
@@ -87,7 +110,43 @@ def handler(event, context):
                 UPDATE applications
                 SET customer_id = %s, status = 'PROCESSING', updated_at = %s
                 WHERE id = %s
-            """, (customer_id, datetime.utcnow(), application_id))
+            """, (customer_id, datetime.now(UTC), application_id))
+
+        # 4b. Send confirmation email to applicant (only when INE processed — has the name)
+        if customer_id and applicant_email and data.get('full_name'):
+            try:
+                sender = os.environ.get('SENDER_EMAIL', 'noreply@bancafiel.com')
+                short_folio = application_id[:8].upper() if application_id else 'N/A'
+                app_data = execute_query_single(
+                    "SELECT loan_amount, application_type FROM applications WHERE id = %s",
+                    (application_id,)
+                )
+                loan_amount = f"${app_data['loan_amount']:,.2f} MXN" if app_data else 'N/A'
+                app_type = 'Crédito' if app_data and app_data['application_type'] == 'CREDIT_CARD' else 'Préstamo'
+
+                ses_client.send_email(
+                    Source=sender,
+                    Destination={'ToAddresses': [applicant_email]},
+                    Message={
+                        'Subject': {'Data': f'[BancaFiel] Tu solicitud fue recibida — Folio {short_folio}'},
+                        'Body': {'Text': {'Data': (
+                            f"Hola {data['full_name'].title()},\n\n"
+                            f"Hemos recibido y validado tu solicitud de {app_type}.\n\n"
+                            f"Folio: {short_folio}\n"
+                            f"Monto solicitado: {loan_amount}\n"
+                            f"Estado: En revisión\n\n"
+                            f"Un analista revisará tu solicitud en un máximo de 2 horas "
+                            f"y te notificaremos el resultado a este correo.\n\n"
+                            f"— BancaFiel Sistema de Crédito"
+                        )}}
+                    }
+                )
+                log_event(logger, 'applicant_confirmation_sent', {
+                    'application_id': application_id,
+                    'email': applicant_email
+                })
+            except Exception as e:
+                log_error(logger, 'applicant_email_failed', e)
 
         # 5. Log audit trail
         create_application_history(

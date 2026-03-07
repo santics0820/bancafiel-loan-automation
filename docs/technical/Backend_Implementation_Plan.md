@@ -26,7 +26,7 @@ Customer Application
     ↓
 API Gateway → Lambda (processDocument) → S3
     ↓
-Lambda (extractData) → Amazon Textract
+Lambda (extractData) → Claude Sonnet 4.5 on Amazon Bedrock
     ↓
 Lambda (validateData) → RDS PostgreSQL
     ↓
@@ -54,7 +54,7 @@ Lambda (sendNotification) → Amazon SES
 - [ ] First 2 Lambda functions deployed and tested
 
 ### Week 2: Core Processing
-- [ ] Textract integration fully functional
+- [ ] Bedrock OCR (Claude Sonnet 4.5) integration fully functional
 - [ ] Data validation logic complete
 - [ ] Fraud Detector configured and tested
 - [ ] All 7 Lambda functions deployed
@@ -88,7 +88,7 @@ Lambda (sendNotification) → Amazon SES
 # Tasks:
 1. Create/configure AWS account
 2. Set up IAM users and roles:
-   - LambdaExecutionRole (with S3, RDS, Textract, Fraud Detector permissions)
+   - LambdaExecutionRole (with S3, RDS, Bedrock OCR (Claude Sonnet 4.5), Fraud Detector permissions)
    - APIGatewayRole
    - StepFunctionsRole
 3. Enable AWS Free Tier alerts
@@ -170,7 +170,7 @@ CREATE TABLE documents (
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Extracted data from Textract
+-- Extracted data from Bedrock OCR (Claude Sonnet 4.5)
 CREATE TABLE extracted_data (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
@@ -535,14 +535,14 @@ from datetime import datetime
 
 logger = setup_logger('processDocument')
 s3_client = boto3.client('s3')
-textract_client = boto3.client('textract')
+bedrock_client = boto3.client('bedrock-runtime')  # Claude Sonnet 4.5
 
 def handler(event, context):
     """
-    Triggered by S3 upload. Initiates Textract processing.
+    Triggered by S3 upload. Initiates Bedrock OCR (Claude Sonnet 4.5) processing.
 
     Event: S3 ObjectCreated notification
-    Output: Textract Job ID
+    Output: Bedrock OCR (Claude Sonnet 4.5) Job ID
     """
     try:
         # Parse S3 event
@@ -559,8 +559,8 @@ def handler(event, context):
             parts = key.split('/')
             application_id = parts[1] if len(parts) > 1 else None
 
-            # Start Textract async job
-            response = textract_client.start_document_text_detection(
+            # Start Bedrock OCR (Claude Sonnet 4.5) async job
+            response = bedrock_client.invoke_model  # Claude Sonnet 4.5(
                 DocumentLocation={
                     'S3Object': {
                         'Bucket': bucket,
@@ -569,7 +569,7 @@ def handler(event, context):
                 },
                 NotificationChannel={
                     'SNSTopicArn': os.environ['SNS_TOPIC_ARN'],
-                    'RoleArn': os.environ['TEXTRACT_ROLE_ARN']
+                    'RoleArn': os.environ['BEDROCK_MODEL_ID']
                 }
             )
 
@@ -594,7 +594,7 @@ def handler(event, context):
                 datetime.utcnow()
             ))
 
-            log_event(logger, 'textract_job_started', {
+            log_event(logger, 'bedrock_extraction_started', {
                 'job_id': job_id,
                 'application_id': application_id
             })
@@ -636,14 +636,14 @@ from utils.logger import setup_logger, log_event
 from utils.database import execute_insert, execute_query
 
 logger = setup_logger('extractData')
-textract_client = boto3.client('textract')
+bedrock_client = boto3.client('bedrock-runtime')  # Claude Sonnet 4.5
 
 def handler(event, context):
     """
-    Triggered by SNS when Textract job completes.
-    Extracts structured data from Textract results.
+    Triggered by SNS when Bedrock OCR (Claude Sonnet 4.5) job completes.
+    Extracts structured data from Bedrock OCR (Claude Sonnet 4.5) results.
 
-    Input: Textract Job ID (via SNS)
+    Input: Bedrock OCR (Claude Sonnet 4.5) Job ID (via SNS)
     Output: Structured data saved to database
     """
     try:
@@ -653,15 +653,15 @@ def handler(event, context):
         status = message['Status']
 
         if status != 'SUCCEEDED':
-            logger.error(f'Textract job {job_id} failed')
-            return {'statusCode': 400, 'body': 'Textract job failed'}
+            logger.error(f'Bedrock OCR (Claude Sonnet 4.5) job {job_id} failed')
+            return {'statusCode': 400, 'body': 'Bedrock OCR (Claude Sonnet 4.5) job failed'}
 
-        # Get Textract results
-        response = textract_client.get_document_text_detection(JobId=job_id)
+        # Get Bedrock OCR (Claude Sonnet 4.5) results
+        response = bedrock_client.invoke_model  # get results(JobId=job_id)
         blocks = response['Blocks']
 
         # Extract text and key-value pairs
-        extracted_fields = parse_textract_blocks(blocks)
+        extracted_fields = parse_bedrock_response(blocks)
 
         log_event(logger, 'data_extracted', {
             'job_id': job_id,
@@ -697,8 +697,8 @@ def handler(event, context):
         logger.error(f'Error extracting data: {str(e)}')
         raise
 
-def parse_textract_blocks(blocks):
-    """Parse Textract blocks into structured fields"""
+def parse_bedrock_response(blocks):
+    """Parse Bedrock OCR (Claude Sonnet 4.5) blocks into structured fields"""
     fields = {}
 
     # For INE/IFE documents
@@ -752,10 +752,10 @@ def extract_date(text):
     return match.group(0) if match else None
 
 def get_document_id_from_job(job_id):
-    """Retrieve document_id associated with Textract job"""
+    """Retrieve document_id associated with Bedrock OCR (Claude Sonnet 4.5) job"""
     # In practice, you'd store this mapping when starting the job
     # For now, query from metadata table or pass through SNS
-    query = "SELECT id FROM documents WHERE textract_job_id = %s"
+    query = "SELECT id FROM documents WHERE textract_job_id = %s"  # column name retained for backward compat, stores Bedrock job ref
     result = execute_query(query, (job_id,))
     return result[0]['id'] if result else None
 
@@ -812,7 +812,7 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
-                - textract:StartDocumentTextDetection
+                - bedrock:InvokeModel
               Resource: '*'
       Events:
         S3Upload:
@@ -831,18 +831,18 @@ Resources:
         - Statement:
             - Effect: Allow
               Action:
-                - textract:GetDocumentTextDetection
+                - bedrock:InvokeModel
               Resource: '*'
       Events:
-        TextractComplete:
+        Bedrock OCR (Claude Sonnet 4.5)Complete:
           Type: SNS
           Properties:
-            Topic: !Ref TextractCompletionTopic
+            Topic: !Ref Bedrock OCR (Claude Sonnet 4.5)CompletionTopic
 
-  TextractCompletionTopic:
+  Bedrock OCR (Claude Sonnet 4.5)CompletionTopic:
     Type: AWS::SNS::Topic
     Properties:
-      TopicName: bancafiel-textract-completion
+      TopicName: bancafiel-document-processing
 
 Outputs:
   ProcessDocumentFunctionArn:
@@ -2130,8 +2130,8 @@ locust -f backend/tests/load/locustfile.py --users 100 --spawn-rate 10
     {
       "Effect": "Allow",
       "Action": [
-        "textract:StartDocumentTextDetection",
-        "textract:GetDocumentTextDetection"
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModel"
       ],
       "Resource": "*"
     }
@@ -2260,7 +2260,7 @@ Production-ready AWS serverless backend for loan processing automation.
 
 - **API**: API Gateway + Lambda (Python 3.11)
 - **Database**: PostgreSQL on RDS
-- **Storage**: S3 + Textract for document processing
+- **Storage**: S3 + Bedrock OCR (Claude Sonnet 4.5) for document processing
 - **Orchestration**: Step Functions
 - **Fraud Detection**: AWS Fraud Detector
 - **Notifications**: SES + SNS
@@ -2339,7 +2339,7 @@ aws logs filter-log-events \
 
 **Resolution**:
 1. Increase timeout in SAM template
-2. Optimize Textract call (use batch processing)
+2. Optimize Bedrock OCR (Claude Sonnet 4.5) call (use batch processing)
 3. Check database connection pooling
 
 ## Issue: High Fraud False Positives

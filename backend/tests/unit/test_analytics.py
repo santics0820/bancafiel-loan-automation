@@ -1,30 +1,19 @@
 """
 Unit tests for API route: analytics
 (backend/src/api/routes/analytics.py)
+
+Run from the backend/ directory:
+    python -m pytest tests/ -v --cov=src/api/routes/analytics --cov-report=term-missing
 """
 import sys
 import os
 import json
 import importlib.util
-import unittest
-import types
 from unittest.mock import patch, MagicMock
 
+import pytest
 
-# unittest does not auto-load tests/conftest.py, so inject lightweight utils fakes here.
-sys.modules.setdefault("utils", types.ModuleType("utils"))
-sys.modules["utils.database"] = types.SimpleNamespace(
-    execute_query=MagicMock(),
-    execute_query_single=MagicMock(),
-)
-sys.modules["utils.logger"] = types.SimpleNamespace(
-    setup_logger=lambda name: MagicMock(),
-    log_error=lambda logger, error_type, error, context=None: None,
-)
-sys.modules["utils.response"] = types.SimpleNamespace(
-    success_response=lambda d, s=200: {"statusCode": s, "body": json.dumps(d, default=str)},
-    error_response=lambda m, s=400, c=None: {"statusCode": s, "body": json.dumps({"error": m})},
-)
+# conftest.py injects utils.database, utils.logger, utils.response into sys.modules before this loads.
 
 _HANDLER_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../src/api/routes/analytics.py")
@@ -35,7 +24,7 @@ sys.modules["analytics_route"] = mod
 _spec.loader.exec_module(mod)
 
 
-class TestAnalyticsRoute(unittest.TestCase):
+class TestAnalyticsRoute:
     def test_get_analytics_success_with_explicit_dates(self):
         event = {
             "queryStringParameters": {
@@ -60,20 +49,20 @@ class TestAnalyticsRoute(unittest.TestCase):
              patch.object(mod, "execute_query", return_value=daily):
             result = mod.get_analytics(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 200)
+        assert result["statusCode"] == 200
         body = json.loads(result["body"])
-        self.assertEqual(body["totalApplications"], 3)
-        self.assertEqual(body["approved"], 2)
-        self.assertEqual(body["rejected"], 1)
-        self.assertEqual(body["pending"], 0)
-        self.assertEqual(body["fraudAlerts"], 1)
-        self.assertEqual(body["approvalRate"], 0.67)
-        self.assertEqual(body["averageProcessingTime"], 45.4)
-        self.assertEqual(len(body["volumeByDay"]), 2)
-        self.assertEqual(body["volumeByDay"][0]["applications"], 1)
+        assert body["totalApplications"] == 3
+        assert body["approved"] == 2
+        assert body["rejected"] == 1
+        assert body["pending"] == 0
+        assert body["fraudAlerts"] == 1
+        assert body["approvalRate"] == 0.67
+        assert body["averageProcessingTime"] == 45.4
+        assert len(body["volumeByDay"]) == 2
+        assert body["volumeByDay"][0]["applications"] == 1
 
         stats_args = mock_stats.call_args[0]
-        self.assertEqual(stats_args[1], ("2026-02-01", "2026-02-15"))
+        assert stats_args[1] == ("2026-02-01", "2026-02-15")
 
     def test_get_analytics_uses_default_dates_and_zero_approval_rate(self):
         event = {"queryStringParameters": None}
@@ -90,12 +79,12 @@ class TestAnalyticsRoute(unittest.TestCase):
              patch.object(mod, "execute_query", return_value=[]) as mock_daily:
             result = mod.get_analytics(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 200)
+        assert result["statusCode"] == 200
         body = json.loads(result["body"])
-        self.assertEqual(body["totalApplications"], 0)
-        self.assertEqual(body["approvalRate"], 0)
-        self.assertEqual(body["averageProcessingTime"], 0.0)
-        self.assertEqual(body["volumeByDay"], [])
+        assert body["totalApplications"] == 0
+        assert body["approvalRate"] == 0
+        assert body["averageProcessingTime"] == 0.0
+        assert body["volumeByDay"] == []
         mock_daily.assert_called_once()
 
     def test_get_analytics_returns_500_on_exception(self):
@@ -104,6 +93,6 @@ class TestAnalyticsRoute(unittest.TestCase):
         with patch.object(mod, "execute_query_single", side_effect=Exception("DB timeout")):
             result = mod.get_analytics(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 500)
+        assert result["statusCode"] == 500
         body = json.loads(result["body"])
-        self.assertEqual(body["error"], "Failed to retrieve analytics")
+        assert body["message"] == "Failed to retrieve analytics"

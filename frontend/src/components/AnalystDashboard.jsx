@@ -5,6 +5,29 @@ import Overview from './Overview'
 import FraudDetection from './FraudDetection'
 import { API_URL } from '../config'
 
+const FRAUD_REASON_LABELS = {
+  high_debt_to_income_ratio:              'Razón deuda-ingreso muy alta (>60%)',
+  elevated_debt_to_income_ratio:          'Razón deuda-ingreso elevada (>40%)',
+  high_loan_amount:                       'Monto solicitado superior a $100,000 MXN',
+  'duplicate_applications_found':         'Solicitudes duplicadas pendientes',
+  applicant_under_18:                     'Solicitante menor de 18 años',
+  curp_dob_mismatch:                      'CURP no coincide con fecha de nacimiento',
+  ine_expired:                            'INE vencida',
+  name_mismatch_ine_vs_proof_of_address:  'Nombre no coincide entre INE y comprobante de domicilio',
+  proof_of_address_older_than_90_days:    'Comprobante de domicilio mayor a 90 días',
+  recent_rejection_same_curp:             'CURP rechazado en los últimos 30 días',
+}
+
+function buildAnalysis(reasons, creditRecommendation) {
+  if (creditRecommendation) return creditRecommendation
+  if (!reasons || reasons.length === 0) return 'Sin alertas detectadas. Solicitud dentro de parámetros normales.'
+  const lines = reasons.map(r => {
+    const key = r.split(':')[0]
+    return `• ${FRAUD_REASON_LABELS[key] ?? r}`
+  })
+  return lines.join('\n')
+}
+
 const riskColors = {
   high:   '#f87171',
   medium: '#fbbf24',
@@ -27,20 +50,21 @@ function timeAgo(dateStr) {
 
 function mapApp(app) {
   return {
-    id:          app.id,
-    name:        app.applicantName ?? app.name ?? '—',
-    time:        timeAgo(app.requestedDate),
-    risk:        app.fraudRiskLevel ?? app.risk ?? 'low',
-    creditScore: app.creditScore ?? '—',
+    id:            app.id,
+    name:          app.applicantName ?? app.name ?? '—',
+    time:          timeAgo(app.requestedDate),
+    requestedDate: app.requestedDate,
+    risk:          app.fraudRiskLevel ?? app.risk ?? 'low',
+    creditScore:   app.fraudScore != null ? `${(app.fraudScore / 10).toFixed(0)}%` : '—',
     details: {
       requestedAmount:    app.loanAmount ? `$${app.loanAmount.toLocaleString('es-MX')} MXN` : '—',
       fraudProbability:   app.fraudScore != null
-                            ? `${(app.fraudScore * 100).toFixed(1)}% (${riskLabel(app.fraudRiskLevel ?? 'low')})`
+                            ? `${(app.fraudScore / 10).toFixed(1)}% (${riskLabel(app.fraudRiskLevel ?? 'low')})`
                             : '—',
       incomeVerification: '—',
       employer:           '—',
       employment:         '—',
-      aiAnalysis:         app.creditRecommendation ?? 'Pendiente de análisis',
+      aiAnalysis:         buildAnalysis(app.fraudReasons, app.creditRecommendation),
       identityMatch:      '—',
       monthlyRent:        '—',
       term:               '—',
@@ -48,28 +72,55 @@ function mapApp(app) {
   }
 }
 
+const STATUS_FILTERS = [
+  { label: 'Todas',      value: 'all' },
+  { label: 'Pendientes', value: 'processing' },
+  { label: 'Aprobadas',  value: 'approved' },
+  { label: 'Rechazadas', value: 'rejected' },
+]
+
+const statusColors = {
+  processing: '#fbbf24',
+  approved:   '#6ee7b7',
+  rejected:   '#f87171',
+}
+
 function AnalystDashboard({ active }) {
-  const [applications, setApplications] = useState([])
-  const [selectedApp,  setSelectedApp]  = useState(null)
-  const [loading,      setLoading]      = useState(true)
-  const [currentView,  setCurrentView]  = useState('applications')
-  const [actionError,  setActionError]  = useState(null)
+  const [allApplications, setAllApplications] = useState([])
+  const [selectedApp,     setSelectedApp]     = useState(null)
+  const [loading,         setLoading]         = useState(true)
+  const [currentView,     setCurrentView]     = useState('applications')
+  const [actionError,     setActionError]     = useState(null)
+  const [statusFilter,    setStatusFilter]    = useState('all')
+
+  const applications = statusFilter === 'all'
+    ? allApplications
+    : allApplications.filter(a => a.status === statusFilter)
+
+  const fetchAll = () => {
+    setLoading(true)
+    Promise.all([
+      fetch(`${API_URL}/api/loans?status=processing`).then(r => r.json()),
+      fetch(`${API_URL}/api/loans?status=approved`).then(r => r.json()),
+      fetch(`${API_URL}/api/loans?status=rejected`).then(r => r.json()),
+    ]).then(([proc, appr, rej]) => {
+      const mapped = [
+        ...(proc.applications ?? []).map(a => ({ ...mapApp(a), status: 'processing' })),
+        ...(appr.applications ?? []).map(a => ({ ...mapApp(a), status: 'approved' })),
+        ...(rej.applications  ?? []).map(a => ({ ...mapApp(a), status: 'rejected'  })),
+      ].sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate))
+      setAllApplications(mapped)
+      setSelectedApp(mapped[0] ?? null)
+      setLoading(false)
+    }).catch(err => {
+      console.error(err)
+      setLoading(false)
+    })
+  }
 
   useEffect(() => {
     if (!active) return
-    setLoading(true)
-    fetch(`${API_URL}/api/loans?status=pending`)
-      .then(r => r.json())
-      .then(data => {
-        const mapped = (data.applications ?? []).map(mapApp)
-        setApplications(mapped)
-        setSelectedApp(mapped[0] ?? null)
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
+    fetchAll()
   }, [active])
 
   const handleSelectApp = async (app) => {
@@ -85,12 +136,12 @@ function AnalystDashboard({ active }) {
                                 ? `$${detail.loanAmount.toLocaleString('es-MX')} MXN`
                                 : '—',
           fraudProbability:   detail.fraudScore != null
-                                ? `${(detail.fraudScore * 100).toFixed(1)}% (${riskLabel(detail.fraudRiskLevel ?? 'low')})`
+                                ? `${(detail.fraudScore / 10).toFixed(1)}% (${riskLabel(detail.fraudRiskLevel ?? 'low')})`
                                 : '—',
           incomeVerification: detail.extractedData?.net_income ? 'VERIFICADO' : 'PENDIENTE',
           employer:           detail.extractedData?.employer_name ?? '—',
           employment:         detail.extractedData?.payment_frequency ?? '—',
-          aiAnalysis:         detail.creditRecommendation ?? 'Pendiente de análisis',
+          aiAnalysis:         buildAnalysis(detail.fraudReasons, detail.creditRecommendation),
           identityMatch:      detail.extractedData?.curp ? '99.8% VERIFICADO' : 'PENDIENTE',
           monthlyRent:        detail.existingDebt
                                 ? `$${detail.existingDebt.toLocaleString('es-MX')} MXN`
@@ -105,9 +156,8 @@ function AnalystDashboard({ active }) {
   }
 
   const removeApp = (id) => {
-    const remaining = applications.filter(a => a.id !== id)
-    setApplications(remaining)
-    setSelectedApp(remaining[0] ?? null)
+    fetchAll()
+    setSelectedApp(null)
   }
 
   const handleApprove = async () => {
@@ -185,8 +235,18 @@ function AnalystDashboard({ active }) {
             <div className="list-header">
               <input type="text" className="search-bar" placeholder="Buscar ID de solicitud..." />
               <div className="filter-row">
-                <span className="filter-label">Filtro:</span>
-                <span className="filter-chip">Pendiente</span>
+                {STATUS_FILTERS.map(f => (
+                  <span
+                    key={f.value}
+                    className={`filter-chip ${statusFilter === f.value ? 'active' : ''}`}
+                    style={statusFilter === f.value && f.value !== 'all'
+                      ? { color: statusColors[f.value], borderColor: statusColors[f.value] }
+                      : {}}
+                    onClick={() => { setStatusFilter(f.value); setSelectedApp(null) }}
+                  >
+                    {f.label}
+                  </span>
+                ))}
               </div>
             </div>
             <div className="app-list">
@@ -197,7 +257,7 @@ function AnalystDashboard({ active }) {
               )}
               {!loading && applications.length === 0 && (
                 <p style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center', fontSize: '13px' }}>
-                  No hay solicitudes pendientes.
+                  No hay solicitudes.
                 </p>
               )}
               {applications.map((app) => (
@@ -211,12 +271,17 @@ function AnalystDashboard({ active }) {
                     <span>{app.time}</span>
                   </div>
                   <div className="app-name">{app.name}</div>
-                  <span
-                    className="risk-pill"
-                    style={{ color: riskColors[app.risk], borderColor: riskColors[app.risk] }}
-                  >
-                    Riesgo: {riskLabel(app.risk)}
-                  </span>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <span
+                      className="risk-pill"
+                      style={{ color: riskColors[app.risk], borderColor: riskColors[app.risk] }}
+                    >
+                      Riesgo: {riskLabel(app.risk)}
+                    </span>
+                    <span style={{ fontSize: '10px', color: statusColors[app.status] ?? 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                      {app.status === 'processing' ? 'Pendiente' : app.status === 'approved' ? 'Aprobada' : 'Rechazada'}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -286,7 +351,7 @@ function AnalystDashboard({ active }) {
               </div>
 
               <div className="glass-panel data-card ai-card">
-                <div className="card-title-sm" style={{ color: 'var(--accent-blue)' }}>Análisis IA</div>
+                <div className="card-title-sm" style={{ color: 'var(--accent-blue)' }}>Análisis</div>
                 <p className="ai-text">{selectedApp.details.aiAnalysis}</p>
               </div>
 
@@ -294,11 +359,23 @@ function AnalystDashboard({ active }) {
                 <p style={{ color: '#f87171', fontSize: '13px', textAlign: 'center' }}>{actionError}</p>
               )}
 
-              <div className="action-row">
-                <button className="action-btn reject" onClick={handleReject}>RECHAZAR</button>
-                <button className="action-btn secondary">SOLICITAR DOCS</button>
-                <button className="action-btn liquid-btn" onClick={handleApprove}>APROBAR</button>
-              </div>
+              {selectedApp.status === 'processing' && (
+                <div className="action-row">
+                  <button className="action-btn reject" onClick={handleReject}>RECHAZAR</button>
+                  <button className="action-btn secondary">SOLICITAR DOCS</button>
+                  <button className="action-btn liquid-btn" onClick={handleApprove}>APROBAR</button>
+                </div>
+              )}
+              {selectedApp.status === 'approved' && (
+                <div style={{ textAlign: 'center', padding: '16px', color: '#6ee7b7', fontSize: '13px', fontWeight: 600, letterSpacing: '1px' }}>
+                  ✓ SOLICITUD APROBADA
+                </div>
+              )}
+              {selectedApp.status === 'rejected' && (
+                <div style={{ textAlign: 'center', padding: '16px', color: '#f87171', fontSize: '13px', fontWeight: 600, letterSpacing: '1px' }}>
+                  ✗ SOLICITUD RECHAZADA
+                </div>
+              )}
             </div>
           )}
         </div>

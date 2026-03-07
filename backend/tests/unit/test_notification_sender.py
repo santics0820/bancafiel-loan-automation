@@ -1,31 +1,18 @@
 """
 Unit tests for Lambda #7: notification-sender
 (backend/src/lambdas/notification-sender/handler.py)
+
+Run from the backend/ directory:
+    python -m pytest tests/ -v --cov=src/lambdas/notification-sender --cov-report=term-missing
 """
 import sys
 import os
 import importlib.util
-import unittest
-import types
 from unittest.mock import patch, MagicMock
 
-try:
-    import boto3  # noqa: F401
-except ModuleNotFoundError:
-    sys.modules["boto3"] = types.SimpleNamespace(client=lambda *args, **kwargs: MagicMock())
+import pytest
 
-# unittest does not auto-load tests/conftest.py, so inject lightweight utils fakes here.
-sys.modules.setdefault("utils", types.ModuleType("utils"))
-sys.modules["utils.database"] = types.SimpleNamespace(
-    execute_query_single=MagicMock(),
-    create_application_history=MagicMock(),
-)
-sys.modules["utils.logger"] = types.SimpleNamespace(
-    setup_logger=lambda name: MagicMock(),
-    log_event=lambda logger, event_type, data: None,
-    log_error=lambda logger, error_type, error, context=None: None,
-)
-
+# conftest.py injects utils.database, utils.logger into sys.modules before this loads.
 
 _HANDLER_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../../src/lambdas/notification-sender/handler.py")
@@ -47,7 +34,7 @@ def _app_record(application_type="LOAN"):
     }
 
 
-class TestNotificationSenderHandler(unittest.TestCase):
+class TestNotificationSenderHandler:
     def test_returns_200_and_sends_email_on_success(self):
         event = {"application_id": "app-001", "type": "approved"}
         mock_ses = MagicMock()
@@ -57,13 +44,13 @@ class TestNotificationSenderHandler(unittest.TestCase):
              patch.object(mod, "ses_client", mock_ses):
             result = mod.handler(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 200)
-        self.assertIn("Notification sent: approved", result["message"])
+        assert result["statusCode"] == 200
+        assert "Notification sent: approved" in result["message"]
         mock_ses.send_email.assert_called_once()
         kwargs = mock_ses.send_email.call_args[1]
-        self.assertEqual(kwargs["Destination"]["ToAddresses"], ["maria@example.com"])
-        self.assertIn("APROBADA", kwargs["Message"]["Subject"]["Data"])
-        self.assertEqual(kwargs["Source"], mod.FROM_EMAIL)
+        assert kwargs["Destination"]["ToAddresses"] == ["maria@example.com"]
+        assert "APROBADA" in kwargs["Message"]["Subject"]["Data"]
+        assert kwargs["Source"] == mod.FROM_EMAIL
 
     def test_returns_404_when_application_not_found(self):
         event = {"application_id": "missing-id", "type": "received"}
@@ -73,7 +60,7 @@ class TestNotificationSenderHandler(unittest.TestCase):
              patch.object(mod, "ses_client", mock_ses):
             result = mod.handler(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 404)
+        assert result["statusCode"] == 404
         mock_ses.send_email.assert_not_called()
 
     def test_falls_back_to_received_template_for_unknown_type(self):
@@ -85,9 +72,9 @@ class TestNotificationSenderHandler(unittest.TestCase):
              patch.object(mod, "ses_client", mock_ses):
             result = mod.handler(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 200)
+        assert result["statusCode"] == 200
         kwargs = mock_ses.send_email.call_args[1]
-        self.assertIn("Hemos recibido su solicitud", kwargs["Message"]["Subject"]["Data"])
+        assert "Hemos recibido su solicitud" in kwargs["Message"]["Subject"]["Data"]
 
     def test_uses_default_received_type_when_type_missing(self):
         event = {"application_id": "app-001"}
@@ -98,11 +85,11 @@ class TestNotificationSenderHandler(unittest.TestCase):
              patch.object(mod, "ses_client", mock_ses):
             result = mod.handler(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 200)
-        self.assertEqual(result["message"], "Notification sent: received")
+        assert result["statusCode"] == 200
+        assert result["message"] == "Notification sent: received"
         args, kwargs = mock_history.call_args
-        self.assertEqual(args[1], "email_sent_received")
-        self.assertIn("received", kwargs["notes"])
+        assert args[1] == "email_sent_received"
+        assert "received" in kwargs["notes"]
 
     def test_credit_application_uses_credit_card_copy_in_email_body(self):
         event = {"application_id": "app-001", "type": "rejected"}
@@ -113,10 +100,10 @@ class TestNotificationSenderHandler(unittest.TestCase):
              patch.object(mod, "ses_client", mock_ses):
             result = mod.handler(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 200)
+        assert result["statusCode"] == 200
         kwargs = mock_ses.send_email.call_args[1]
         body_text = kwargs["Message"]["Body"]["Text"]["Data"]
-        self.assertIn("tarjeta de crédito", body_text)
+        assert "tarjeta de crédito" in body_text
 
     def test_ses_message_rejected_does_not_fail_workflow(self):
         class _SESMessageRejected(Exception):
@@ -141,8 +128,8 @@ class TestNotificationSenderHandler(unittest.TestCase):
              patch.object(mod, "ses_client", fake_ses):
             result = mod.handler(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 200)
-        self.assertEqual(fake_ses.send_email_calls, 1)
+        assert result["statusCode"] == 200
+        assert fake_ses.send_email_calls == 1
         mock_history.assert_called_once()
 
     def test_returns_500_on_unexpected_exception(self):
@@ -151,5 +138,5 @@ class TestNotificationSenderHandler(unittest.TestCase):
         with patch.object(mod, "execute_query_single", side_effect=Exception("DB connection failed")):
             result = mod.handler(event, context=MagicMock())
 
-        self.assertEqual(result["statusCode"], 500)
-        self.assertIn("DB connection failed", result["error"])
+        assert result["statusCode"] == 500
+        assert "DB connection failed" in result["error"]

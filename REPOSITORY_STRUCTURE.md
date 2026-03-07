@@ -16,7 +16,7 @@ KPMG/  (Repository Root)
 │   ├── README.md                         # Backend setup guide
 │   ├── src/
 │   │   ├── lambdas/                      # AWS Lambda functions
-│   │   │   ├── document-processor/       # Textract OCR
+│   │   │   ├── document-processor/       # Bedrock OCR (Claude Sonnet 4.5) OCR
 │   │   │   ├── fraud-detector/           # Fraud analysis
 │   │   │   ├── credit-scorer/            # Credit scoring
 │   │   │   └── notification-sender/      # SES emails

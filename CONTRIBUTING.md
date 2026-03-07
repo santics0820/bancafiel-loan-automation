@@ -36,7 +36,7 @@ Before the table, here's a plain-English glossary of the services we use:
 | **S3** | AWS file storage — like Google Drive for our system. Documents land here. |
 | **API Gateway** | The front door of our backend. Receives requests from the web app and routes them to the right Lambda. |
 | **RDS PostgreSQL** | Our database. Stores all customer records, applications, and decisions. |
-| **Textract** | An AWS service that reads PDFs and images and extracts text — like a very fast, accurate human reader. |
+| **Bedrock OCR (Claude Sonnet 4.5)** | An AWS service that reads PDFs and images and extracts text — like a very fast, accurate human reader. |
 | **SNS** | A messaging system. When one service finishes, it sends a notification to trigger the next one. |
 | **Step Functions** | A workflow manager. Routes the application to the right approver based on fraud risk level. |
 | **Fraud Detector** | An AWS ML service that scores how risky an application looks based on patterns. |
@@ -47,8 +47,8 @@ Before the table, here's a plain-English glossary of the services we use:
 | # | Manual Step (Today) | AWS Service | Our Lambda |
 |---|---|---|---|
 | 1 | Customer emails documents; team downloads attachments manually | API Gateway + S3 | `submitApplication` — web form uploads documents directly to S3 |
-| 2 | Team leader opens each PDF and reads it by hand | Amazon Textract | `processDocument` — triggered by S3 upload, sends PDF to Textract |
-| 3 | Team leader waits, then structures the extracted data | SNS + Textract async | `extractData` — triggered when Textract finishes; saves structured fields to DB |
+| 2 | Team leader opens each PDF and reads it by hand | Claude Sonnet 4.5 on Amazon Bedrock | `processDocument` — triggered by S3 upload, sends PDF to Bedrock OCR (Claude Sonnet 4.5) |
+| 3 | Team leader waits, then structures the extracted data | SNS + Bedrock OCR (Claude Sonnet 4.5) async | `extractData` — triggered when Bedrock OCR (Claude Sonnet 4.5) finishes; saves structured fields to DB |
 | 4 | Cross-checks document data against the bank's system | RDS PostgreSQL | `validateData` — queries DB by CURP automatically, flags mismatches |
 | 5 | Admin types everything into Excel | RDS PostgreSQL | Already done — data is in the DB after step 4 |
 | 6 | File forwarded by email to the right approver | Fraud Detector + Step Functions | `detectFraud` — scores risk; Step Functions routes LOW → analyst, MEDIUM → senior, HIGH → auto-reject |
