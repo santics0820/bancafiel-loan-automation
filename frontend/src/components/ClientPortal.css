@@ -63,6 +63,309 @@
   animation: fadeSlideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+.kyc-intro-card {
+  width: 560px;
+  text-align: center;
+  align-items: stretch;
+  gap: 20px;
+  padding: 36px 34px;
+}
+
+.kyc-auth-card {
+  width: 520px;
+  text-align: left;
+  align-items: stretch;
+  gap: 16px;
+  padding: 34px 30px;
+}
+
+.auth-choice-badge {
+  display: inline-flex;
+  align-self: flex-start;
+  width: fit-content;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(148, 163, 184, 0.07);
+  color: #cbd5e1;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.auth-choice-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.auth-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02));
+  color: var(--text-secondary);
+  border-radius: 14px;
+  padding: 13px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  font-family: var(--font-main);
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
+}
+
+.auth-mode-btn:hover {
+  border-color: rgba(96, 165, 250, 0.45);
+  color: var(--text-primary);
+  background: linear-gradient(180deg, rgba(96, 165, 250, 0.13), rgba(96, 165, 250, 0.06));
+  transform: translateY(-1px);
+}
+
+.auth-mode-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  background: rgba(96, 165, 250, 0.11);
+}
+
+.auth-mode-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.auth-mode-copy strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.auth-mode-copy small {
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.auth-trust-note {
+  margin: -2px 0 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  color: rgba(148, 163, 184, 0.85);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+.auth-trust-note span {
+  color: rgba(148, 163, 184, 0.92);
+  display: inline-flex;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.auth-field span {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.auth-field input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 11px 12px;
+  font-size: 0.88rem;
+  font-family: var(--font-main);
+  color: var(--text-primary);
+}
+
+.auth-field input::placeholder {
+  color: rgba(148, 163, 184, 0.75);
+}
+
+.auth-field input:focus {
+  border-color: rgba(96, 165, 250, 0.45);
+  background: rgba(96, 165, 250, 0.06);
+}
+
+.auth-error {
+  margin: 2px 0 0;
+  font-size: 0.73rem;
+  color: #fda4af;
+}
+
+.kyc-intro-badge {
+  display: inline-flex;
+  align-self: center;
+  width: fit-content;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  background: rgba(96, 165, 250, 0.08);
+  color: #93c5fd;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kyc-id-logo {
+  width: 62px;
+  height: 62px;
+  border-radius: 16px;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bfdbfe;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.22);
+}
+
+.kyc-intro-card .kyc-intro p {
+  margin-top: 8px;
+}
+
+.kyc-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kyc-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  text-align: left;
+  padding: 12px 13px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+}
+
+.kyc-step-index {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(96, 165, 250, 0.16);
+  border: 1px solid rgba(96, 165, 250, 0.32);
+  color: #bfdbfe;
+  font-size: 0.7rem;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.kyc-step-item p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-size: 0.84rem;
+}
+
+.privacy-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(148, 163, 184, 0.04);
+  opacity: 0.82;
+}
+
+.privacy-notice-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(148, 163, 184, 0.9);
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.privacy-notice p {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.privacy-notice strong {
+  color: rgba(203, 213, 225, 0.9);
+  font-weight: 600;
+}
+
+.kyc-intro-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.kyc-intro-actions .liquid-btn {
+  width: auto;
+  min-width: 130px;
+}
+
+.kyc-ghost-btn {
+  background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%) !important;
+  border: none;
+  color: #0f172a;
+}
+
+.kyc-ghost-btn:hover {
+  color: #0f172a;
+  filter: brightness(1.1);
+}
+
+@media (max-width: 640px) {
+  .kyc-intro-card {
+    width: 100%;
+    padding: 28px 20px;
+    gap: 16px;
+  }
+
+  .kyc-auth-card {
+    width: 100%;
+    padding: 24px 18px;
+  }
+
+  .kyc-intro-actions {
+    flex-direction: column-reverse;
+  }
+
+  .kyc-intro-actions .liquid-btn {
+    width: 100%;
+  }
+}
+
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
