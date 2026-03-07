@@ -4,11 +4,16 @@ import Logo from './Logo'
 import INEScanner from './INEScanner'
 import CardSwap, { Card } from './CardSwap'
 import CreditCard from './CreditCard'
-import LiquidDashboard from './LiquidDashboard'
 import { API_URL } from '../config'
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const STEPS = ['upload', 'rfc', 'income', 'credit']
+const KYC_PRECHECK_STEPS = [
+  'Permite el acceso a la cámara cuando tu navegador lo solicite.',
+  'Captura claramente el frente de tu identificación oficial.',
+  'Captura claramente la parte trasera de tu identificación oficial.',
+  'Completa la prueba biométrica facial mirando directamente a la cámara.',
+]
 
 const incomeRangeToNumber = (range) => ({
   '5-15':  10000,
@@ -70,28 +75,6 @@ const INCOME_TYPES = [
       </svg>
     ),
   },
-  {
-    key: 'estudiante', label: 'Estudiante',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
-        <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/>
-      </svg>
-    ),
-  },
-  {
-    key: 'sin_ingresos', label: 'Sin ingresos propios',
-    icon: (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
-        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-      </svg>
-    ),
-  },
 ]
 
 const INCOME_RANGES = [
@@ -102,7 +85,7 @@ const INCOME_RANGES = [
 ]
 
 function computeCredit(type, range) {
-  const mult = { asalariado: 1, independiente: 0.9, empresario: 1.3, pensionado: 0.75, estudiante: 0.5, sin_ingresos: 0.35 }
+  const mult = { asalariado: 1, independiente: 0.9, empresario: 1.3, pensionado: 0.75 }
   const base = { '5-15': 12000, '15-30': 30000, '30-50': 55000, '50+': 90000 }
   return Math.min(Math.round((base[range] * mult[type]) / 1000) * 1000, 100000)
 }
@@ -116,12 +99,14 @@ function getCardTier(amount) {
 // ── Component ──────────────────────────────────────────────────────────────
 function ClientPortal({ active }) {
   const [step,          setStep]          = useState('landing')
+  const [authEmail,     setAuthEmail]     = useState('')
+  const [authPassword,  setAuthPassword]  = useState('')
+  const [authConfirm,   setAuthConfirm]   = useState('')
+  const [authError,     setAuthError]     = useState(null)
   const [uploadedFile,  setUploadedFile]  = useState(null)
   const [isDragging,    setIsDragging]    = useState(false)
   const [rfc,           setRfc]           = useState('')
   const [email,         setEmail]         = useState('')
-  const [authMode,      setAuthMode]      = useState('new')     // 'new' | 'existing'
-  const [authPassword,  setAuthPassword]  = useState('')
   const [incomeType,    setIncomeType]    = useState(null)
   const [incomeRange,   setIncomeRange]   = useState(null)
   const [creditLine,    setCreditLine]    = useState(0)
@@ -129,73 +114,13 @@ function ClientPortal({ active }) {
   const [capturedINEFile, setCapturedINEFile] = useState(null)
   const [applicationId, setApplicationId] = useState(null)
   const [submitError,   setSubmitError]   = useState(null)
-  const [authError,     setAuthError]     = useState(null)
-  const [authLoading,   setAuthLoading]   = useState(false)
-  const [authStep,      setAuthStep]      = useState('email') // 'email' | 'password'
-  const [trackingData,  setTrackingData]  = useState(null)
-  const [trackingLoading, setTrackingLoading] = useState(false)
   const fileInputRef = useRef(null)
-
-  const authValid = email.includes('@') && email.includes('.')
-  const canSignIn = authValid && authPassword.length >= 6
-
-  const handleAuth = async () => {
-    setAuthError(null)
-    setAuthLoading(true)
-    try {
-      const endpoint = authMode === 'new' ? '/api/auth/register' : '/api/auth/login'
-      const res = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password: authPassword }),
-      })
-      const data = await res.json()
-      if (!res.ok) { setAuthError(data.error || 'Error al autenticar'); setAuthLoading(false); return }
-
-      localStorage.setItem('bf_token', data.token)
-      localStorage.setItem('bf_email', data.email)
-
-      if (authMode === 'new') {
-        setStep('kyc-notice')
-      } else {
-        // Existing user — fetch their application status
-        if (data.hasApplication && data.folio) {
-          setApplicationId(data.folio)
-          const statusRes = await fetch(`${API_URL}/api/loans/status?folio=${data.folio}&email=${data.email}`)
-          if (statusRes.ok) {
-            const statusData = await statusRes.json()
-            setTrackingData(statusData)
-          }
-          setStep('tracking')
-        } else {
-          setStep('kyc-notice')
-        }
-      }
-    } catch (err) {
-      console.error('handleAuth error:', err)
-      setAuthError('Error de conexión. Intenta de nuevo.')
-    }
-    setAuthLoading(false)
-  }
-
-  const handleShowTracking = async () => {
-    setTrackingLoading(true)
-    try {
-      const folio = applicationId?.slice(0, 8).toUpperCase()
-      const res = await fetch(`${API_URL}/api/loans/status?folio=${folio}&email=${encodeURIComponent(email)}`)
-      if (res.ok) setTrackingData(await res.json())
-    } catch (e) { /* show screen anyway with defaults */ }
-    setTrackingLoading(false)
-    setStep('tracking')
-  }
 
   // KYC capture — store name + INE image blob
   const handleCapture = (image, mode, name) => {
-    if (mode === 'card-combined') {
-      // Combined front+back INE JPEG blob — store for upload
-      if (image) setCapturedINEFile(image)
-    } else if (mode === 'face') {
+    if (mode === 'face') {
       if (name) setCapturedName(name)
+      if (image) setCapturedINEFile(image)
       setStep('complete')
     }
   }
@@ -220,12 +145,12 @@ function ClientPortal({ active }) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
 
-      // 2. Upload INE scan (combined front+back JPEG) to S3 if URL provided
+      // 2. Upload INE scan to S3 if URL provided
       if (capturedINEFile && data.uploadUrls?.ine) {
         await fetch(data.uploadUrls.ine.url, {
           method: 'PUT',
           body: capturedINEFile,
-          headers: { 'Content-Type': 'image/jpeg' },
+          headers: { 'Content-Type': 'application/pdf' },
         })
       }
 
@@ -266,31 +191,40 @@ function ClientPortal({ active }) {
     setStep('credit')
   }
 
-  if (!active) return null
+  const handleAuthLogin = (e) => {
+    e.preventDefault()
+    setAuthError(null)
 
-  // Shared computed values — used by card-reveal and approved dashboard
-  const revealName   = capturedName || trackingData?.applicantName || trackingData?.applicant_name || trackingData?.name || ''
-  const revealAmount = creditLine || trackingData?.loanAmount || trackingData?.loan_amount || trackingData?.credit_line || 0
-  const revealTier   = getCardTier(revealAmount)
-  const cardLastFour = applicationId ? applicationId.replace(/-/g, '').slice(-4).toUpperCase() : '••••'
-  const cardExpiry   = (() => {
-    const d = new Date()
-    d.setFullYear(d.getFullYear() + 3)
-    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`
-  })()
+    const email = authEmail.trim()
+    if (!email || !authPassword) {
+      setAuthError('Ingresa correo y contraseña para continuar.')
+      return
+    }
 
-  if (step === 'approved') {
-    return (
-      <LiquidDashboard
-        active={true}
-        userName={revealName}
-        creditLine={revealAmount}
-        cardTier={revealTier}
-        cardLastFour={cardLastFour}
-        cardExpiry={cardExpiry}
-      />
-    )
+    setEmail(email)
+    setStep('kyc-intro')
   }
+
+  const handleAuthRegister = (e) => {
+    e.preventDefault()
+    setAuthError(null)
+
+    const email = authEmail.trim()
+    if (!email || !authPassword || !authConfirm) {
+      setAuthError('Completa todos los campos para crear tu cuenta.')
+      return
+    }
+
+    if (authPassword !== authConfirm) {
+      setAuthError('Las contraseñas no coinciden.')
+      return
+    }
+
+    setEmail(email)
+    setStep('kyc-intro')
+  }
+
+  if (!active) return null
 
   const tier = getCardTier(creditLine)
 
@@ -308,7 +242,7 @@ function ClientPortal({ active }) {
               <h1>Solicita tu tarjeta</h1>
               <p>100% digital · Menos de 5 minutos</p>
             </div>
-            <button className="liquid-btn kyc-cta" onClick={() => setStep('auth')}>
+            <button className="liquid-btn kyc-cta" onClick={() => setStep('auth-choice')}>
               Empezar
             </button>
           </div>
@@ -340,196 +274,217 @@ function ClientPortal({ active }) {
         </div>
       )}
 
-      {/* ── AUTH ── */}
-      {step === 'auth' && (
-        <div className="kyc-card glass-panel">
-          <Logo />
+      {/* ── AUTH CHOICE ── */}
+      {step === 'auth-choice' && (
+        <div className="kyc-card glass-panel kyc-auth-card">
+          <span className="auth-choice-badge">Acceso seguro</span>
+          <div className="kyc-intro">
+            <h1>Acceso al portal</h1>
+            <p>Selecciona cómo deseas continuar.</p>
+          </div>
 
-          {/* Tab toggle: new vs existing */}
-          <div className="auth-tab-toggle">
+          <div className="auth-choice-actions">
             <button
-              className={`auth-tab ${authMode === 'new' ? 'active' : ''}`}
-              onClick={() => { setAuthMode('new'); setAuthPassword(''); setAuthStep('email'); setAuthError(null) }}
+              type="button"
+              className="auth-mode-btn"
+              onClick={() => { setAuthError(null); setAuthConfirm(''); setStep('auth-login') }}
             >
-              Nuevo cliente
+              <span className="auth-mode-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </span>
+              <span className="auth-mode-copy">
+                <strong>Ya soy cliente</strong>
+                <small>Ingresar con correo y contraseña.</small>
+              </span>
             </button>
             <button
-              className={`auth-tab ${authMode === 'existing' ? 'active' : ''}`}
-              onClick={() => setAuthMode('existing')}
+              type="button"
+              className="auth-mode-btn"
+              onClick={() => { setAuthError(null); setStep('auth-register') }}
             >
-              Ya tengo cuenta
+              <span className="auth-mode-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                  <circle cx="12" cy="12" r="9" />
+                </svg>
+              </span>
+              <span className="auth-mode-copy">
+                <strong>Soy cliente nuevo</strong>
+                <small>Crear cuenta para acceder al portal.</small>
+              </span>
             </button>
           </div>
 
-          <div className="kyc-intro" style={{ gap: '6px' }}>
-            <h1 style={{ fontSize: '1.5rem' }}>
-              {authMode === 'new'
-                ? (authStep === 'email' ? 'Crea tu cuenta' : 'Crea tu contraseña')
-                : 'Bienvenido de vuelta'}
-            </h1>
-            <p>
-              {authMode === 'new'
-                ? (authStep === 'email' ? 'Ingresa tu correo para comenzar.' : `Cuenta: ${email}`)
-                : 'Ingresa tu correo y contraseña.'}
-            </p>
+          <p className="auth-trust-note">
+            <span aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="10" rx="2" />
+                <path d="M7 11V8a5 5 0 0 1 10 0v3" />
+              </svg>
+            </span>
+            Sesión cifrada SSL/TLS
+          </p>
+
+          <div className="kyc-intro-actions">
+            <button type="button" className="liquid-btn kyc-ghost-btn" onClick={() => setStep('landing')}>
+              Volver
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── AUTH LOGIN ── */}
+      {step === 'auth-login' && (
+        <div className="kyc-card glass-panel kyc-auth-card">
+          <div className="kyc-intro">
+            <h1>Iniciar sesión</h1>
+            <p>Ingresa con tu cuenta existente.</p>
           </div>
 
-          <div className="auth-fields">
-            {/* Email: always shown for existing; only on step 'email' for new */}
-            {(authMode === 'existing' || authStep === 'email') && (
+          <form className="auth-form" onSubmit={handleAuthLogin}>
+            <label className="auth-field">
+              <span>Correo electrónico</span>
               <input
-                className="rfc-input"
                 type="email"
-                placeholder="correo@ejemplo.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoFocus
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                placeholder="tu@correo.com"
+                autoComplete="email"
               />
-            )}
-            {/* Password: always shown for existing; only on step 'password' for new */}
-            {(authMode === 'existing' || authStep === 'password') && (
+            </label>
+
+            <label className="auth-field">
+              <span>Contraseña</span>
               <input
-                className="rfc-input"
                 type="password"
-                placeholder={authMode === 'new' ? 'Crea una contraseña (mín. 6 caracteres)' : 'Contraseña'}
                 value={authPassword}
                 onChange={(e) => setAuthPassword(e.target.value)}
-                autoFocus={authMode === 'new' && authStep === 'password'}
+                placeholder="Ingresa tu contraseña"
+                autoComplete="current-password"
               />
-            )}
-          </div>
+            </label>
 
-          {authError && (
-            <p style={{ color: '#f87171', fontSize: '13px', textAlign: 'center', marginTop: '4px' }}>{authError}</p>
-          )}
+            {authError && <p className="auth-error">{authError}</p>}
 
-          {/* Step 1 for new: just validate email and advance */}
-          {authMode === 'new' && authStep === 'email' && (
-            <button
-              className="liquid-btn kyc-cta"
-              disabled={!authValid}
-              style={{ opacity: authValid ? 1 : 0.35, cursor: authValid ? 'pointer' : 'not-allowed' }}
-              onClick={() => { setAuthError(null); setAuthStep('password') }}
-            >
-              Continuar →
-            </button>
-          )}
-
-          {/* Step 2 for new: validate password and submit */}
-          {authMode === 'new' && authStep === 'password' && (
-            <button
-              className="liquid-btn kyc-cta"
-              disabled={!canSignIn || authLoading}
-              style={{ opacity: (canSignIn && !authLoading) ? 1 : 0.35, cursor: (canSignIn && !authLoading) ? 'pointer' : 'not-allowed' }}
-              onClick={handleAuth}
-            >
-              {authLoading ? 'Verificando…' : 'Continuar →'}
-            </button>
-          )}
-
-          {/* Existing user: single step */}
-          {authMode === 'existing' && (
-            <button
-              className="liquid-btn kyc-cta"
-              disabled={!canSignIn || authLoading}
-              style={{ opacity: (canSignIn && !authLoading) ? 1 : 0.35, cursor: (canSignIn && !authLoading) ? 'pointer' : 'not-allowed' }}
-              onClick={handleAuth}
-            >
-              {authLoading ? 'Verificando…' : 'Iniciar sesión →'}
-            </button>
-          )}
-
-          {authMode === 'new' && authStep === 'password'
-            ? <button className="auth-back-link" onClick={() => { setAuthError(null); setAuthStep('email') }}>← Cambiar correo</button>
-            : <button className="auth-back-link" onClick={() => { setAuthError(null); setAuthStep('email'); setStep('landing') }}>← Volver</button>
-          }
+            <div className="kyc-intro-actions">
+              <button type="button" className="liquid-btn kyc-ghost-btn" onClick={() => setStep('auth-choice')}>
+                Volver
+              </button>
+              <button type="submit" className="liquid-btn">
+                Ingresar
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
-      {/* ── SIGNED IN (existing client) ── */}
-      {step === 'signedin' && (
-        <div className="kyc-card glass-panel kyc-complete-card">
-          <div className="check-ring">
-            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-              <circle cx="32" cy="32" r="30" stroke="#6ee7b7" strokeWidth="1.5" opacity="0.2"/>
-              <path className="check-path" d="M18 32 L27 41 L46 22"
-                stroke="#6ee7b7" strokeWidth="2.5"
-                strokeLinecap="round" strokeLinejoin="round"/>
+      {/* ── AUTH REGISTER ── */}
+      {step === 'auth-register' && (
+        <div className="kyc-card glass-panel kyc-auth-card">
+          <div className="kyc-intro">
+            <h1>Crear cuenta</h1>
+            <p>Regístrate con correo y contraseña para el portal.</p>
+          </div>
+
+          <form className="auth-form" onSubmit={handleAuthRegister}>
+            <label className="auth-field">
+              <span>Correo electrónico</span>
+              <input
+                type="email"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                placeholder="tu@correo.com"
+                autoComplete="email"
+              />
+            </label>
+
+            <label className="auth-field">
+              <span>Contraseña</span>
+              <input
+                type="password"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                placeholder="Crea una contraseña"
+                autoComplete="new-password"
+              />
+            </label>
+
+            <label className="auth-field">
+              <span>Confirmar contraseña</span>
+              <input
+                type="password"
+                value={authConfirm}
+                onChange={(e) => setAuthConfirm(e.target.value)}
+                placeholder="Confirma tu contraseña"
+                autoComplete="new-password"
+              />
+            </label>
+
+            {authError && <p className="auth-error">{authError}</p>}
+
+            <div className="kyc-intro-actions">
+              <button type="button" className="liquid-btn kyc-ghost-btn" onClick={() => setStep('auth-choice')}>
+                Volver
+              </button>
+              <button type="submit" className="liquid-btn">
+                Crear cuenta
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── KYC INTRO ── */}
+      {step === 'kyc-intro' && (
+        <div className="kyc-card glass-panel kyc-intro-card">
+          <span className="kyc-intro-badge">Preparación de verificación</span>
+          <div className="kyc-id-logo" aria-hidden="true">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="5" width="18" height="14" rx="2" />
+              <circle cx="9" cy="12" r="2.2" />
+              <path d="M13.5 10h4" />
+              <path d="M13.5 13h4" />
+              <path d="M7 16h10" />
             </svg>
           </div>
-          <p className="complete-label">Sesión iniciada</p>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center' }}>
-            Bienvenido de vuelta,<br /><strong style={{ color: 'var(--text-primary)' }}>{email}</strong>
-          </p>
-          <button className="liquid-btn kyc-cta" onClick={() => setStep('kyc-notice')}
-            style={{ marginTop: '8px' }}>
-            Solicitar nueva tarjeta →
-          </button>
-          <button className="auth-back-link" onClick={() => setStep('auth')}>
-            ← Cambiar cuenta
-          </button>
-        </div>
-      )}
-
-      {/* ── KYC NOTICE ── */}
-      {step === 'kyc-notice' && (
-        <div className="kyc-card glass-panel kyc-notice-card">
-          <div className="kyc-notice-icons">
-            {/* Person icon */}
-            <div className="kyc-notice-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="1.5"
-                strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="8" r="4"/>
-                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-              </svg>
-            </div>
-
-            <div className="kyc-notice-plus">+</div>
-
-            {/* ID card icon */}
-            <div className="kyc-notice-icon">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="1.5"
-                strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="5" width="20" height="14" rx="2"/>
-                <circle cx="8" cy="12" r="2"/>
-                <path d="M13 10h4M13 14h3"/>
-              </svg>
-            </div>
+          <div className="kyc-intro">
+            <h1>Vamos a verificar tu identidad.</h1>
+            <p>Completa los siguientes pasos en orden:</p>
           </div>
 
-          <div className="kyc-intro">
-            <h1>Verificación de identidad</h1>
+          <div className="kyc-steps-list">
+            {KYC_PRECHECK_STEPS.map((stepText, idx) => (
+              <div key={stepText} className="kyc-step-item">
+                <span className="kyc-step-index">{idx + 1}</span>
+                <p>{stepText}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="privacy-notice">
+            <div className="privacy-notice-icon" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </div>
             <p>
-              Para continuar necesitamos verificar tu identidad.<br/>
-              Ten a la mano tu <strong style={{ color: 'var(--text-primary)' }}>INE</strong> y
-              asegúrate de estar en un lugar con <strong style={{ color: 'var(--text-primary)' }}>buena iluminación</strong>.
+              <strong>Aviso de privacidad:</strong> Tus datos de identificación y biométricos se cifran y se utilizan únicamente para verificar tu identidad, prevenir fraudes y cumplir con requisitos legales.
             </p>
           </div>
 
-          <div className="kyc-notice-steps">
-            <div className="kyc-notice-step">
-              <span className="kyc-notice-num">1</span>
-              <span>Fotografía frontal de tu INE</span>
-            </div>
-            <div className="kyc-notice-step">
-              <span className="kyc-notice-num">2</span>
-              <span>Fotografía trasera de tu INE</span>
-            </div>
-            <div className="kyc-notice-step">
-              <span className="kyc-notice-num">3</span>
-              <span>Selfie para confirmar tu identidad</span>
-            </div>
+          <div className="kyc-intro-actions">
+            <button className="liquid-btn kyc-ghost-btn" onClick={() => setStep('auth-choice')}>
+              Volver
+            </button>
+            <button className="liquid-btn" onClick={() => setStep('kyc')}>
+              Continuar
+            </button>
           </div>
-
-          <button className="liquid-btn kyc-cta" onClick={() => setStep('kyc')}>
-            Comenzar verificación →
-          </button>
-
-          <button className="auth-back-link" onClick={() => setStep('auth')}>
-            ← Volver
-          </button>
         </div>
       )}
 
@@ -537,7 +492,7 @@ function ClientPortal({ active }) {
       {step === 'kyc' && (
         <div className="portal-card glass-panel scanner-mode">
           <div className="scanner-view">
-            <INEScanner onCapture={handleCapture} onBack={() => setStep('auth')} />
+            <INEScanner onCapture={handleCapture} onBack={() => setStep('kyc-intro')} />
           </div>
         </div>
       )}
@@ -641,9 +596,19 @@ function ClientPortal({ active }) {
             <span className="rfc-hint">{rfc.length} / 12–13 caracteres</span>
           </div>
 
+          <div className="rfc-field" style={{ marginTop: '12px' }}>
+            <input
+              className="rfc-input"
+              type="email"
+              placeholder="correo@ejemplo.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
           <button className="liquid-btn kyc-cta"
-            disabled={rfc.length < 12}
-            style={{ opacity: rfc.length >= 12 ? 1 : 0.35, cursor: rfc.length >= 12 ? 'pointer' : 'not-allowed' }}
+            disabled={rfc.length < 12 || !email.includes('@')}
+            style={{ opacity: (rfc.length >= 12 && email.includes('@')) ? 1 : 0.35, cursor: (rfc.length >= 12 && email.includes('@')) ? 'pointer' : 'not-allowed' }}
             onClick={() => setStep('income')}
           >
             Continuar →
@@ -774,101 +739,8 @@ function ClientPortal({ active }) {
           <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '8px', textAlign: 'center' }}>
             Te notificaremos a <strong>{email}</strong> en máximo 2 horas.
           </p>
-          <button className="liquid-btn kyc-cta" onClick={handleShowTracking}
-            disabled={trackingLoading}
-            style={{ marginTop: '16px', opacity: trackingLoading ? 0.5 : 1 }}>
-            {trackingLoading ? 'Cargando…' : 'Ver estado →'}
-          </button>
         </div>
       )}
-
-      {/* ── TRACKING ── */}
-      {step === 'tracking' && (() => {
-        const defaultSteps = [
-          { label: 'Solicitud recibida',        status: 'done'    },
-          { label: 'Verificación de identidad', status: 'done'    },
-          { label: 'Análisis de documentos',    status: 'active'  },
-          { label: 'Resolución final',          status: 'pending' },
-        ]
-        const steps = trackingData?.steps || defaultSteps
-        const folio  = applicationId?.slice(0, 8).toUpperCase() || trackingData?.folio
-        return (
-          <div className="kyc-card glass-panel tracking-view">
-            <Logo />
-            <div className="kyc-intro" style={{ gap: '4px' }}>
-              <h1 style={{ fontSize: '1.4rem' }}>Estado de tu solicitud</h1>
-              <p style={{ fontFamily: 'monospace', fontSize: '15px', color: 'var(--text-primary)' }}>
-                Folio {folio}
-              </p>
-            </div>
-
-            <div className="tracking-pipeline">
-              {steps.map((s, i) => (
-                <div key={i} className={`tracking-step ${s.status}`}>
-                  <div className="tracking-node">
-                    {s.status === 'done' && (
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M2.5 7 L5.5 10 L11.5 4" stroke="currentColor" strokeWidth="1.8"
-                          strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    )}
-                    {s.status === 'active' && <div className="tracking-pulse" />}
-                  </div>
-                  {i < steps.length - 1 && <div className="tracking-connector" />}
-                  <span className="tracking-label">{s.label}</span>
-                  <span className="tracking-badge">{
-                    s.status === 'done'    ? 'Completado' :
-                    s.status === 'active'  ? 'En proceso' : 'Pendiente'
-                  }</span>
-                </div>
-              ))}
-            </div>
-
-            {steps.every(s => s.status === 'done') && (
-              <button className="liquid-btn kyc-cta card-reveal-trigger" onClick={() => setStep('card-reveal')}>
-                Comienza ahora
-              </button>
-            )}
-
-            <button className="auth-back-link" onClick={() => setStep('confirmed')}>
-              ← Volver
-            </button>
-          </div>
-        )
-      })()}
-
-      {/* ── CARD REVEAL ANIMATION ── */}
-      {step === 'card-reveal' && (() => {
-        const cardType = revealTier.cls === 'tier-gold' ? 'gold-dark' : revealTier.cls === 'tier-classic' ? 'blue-dark' : 'gray-dark'
-        return (
-          <div className="card-reveal-scene">
-            <div className="card-reveal-glow" />
-
-            <div className="card-reveal-card-wrap">
-              <div style={{ width: '300px', height: '190px' }}>
-                <CreditCard
-                  type={cardType}
-                  tier={revealTier.label.replace('BANCAFIEL ', '')}
-                  number="•••• •••• •••• ••••"
-                  expiry={cardExpiry}
-                  holder={revealName.toUpperCase()}
-                />
-              </div>
-            </div>
-
-            <div className="card-reveal-info">
-              <div className="card-reveal-limit-block">
-                <span className="card-reveal-limit-label">Línea de crédito aprobada</span>
-                <span className="card-reveal-limit">${Math.round(parseFloat(revealAmount)).toLocaleString('en-US')}</span>
-                <button className="card-reveal-continue" onClick={() => setStep('approved')}>
-                  ¡Bienvenido a BANCAFIEL!
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
 
     </div>
   )
