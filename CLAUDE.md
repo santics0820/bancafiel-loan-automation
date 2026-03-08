@@ -31,7 +31,7 @@ S3 upload (incoming bucket)
                     └─► async invoke
                           └─► [3] validateData  — validates fields, links customer by CURP
                                 └─► async invoke
-                                      └─► [4] detectFraud  — AWS Fraud Detector, scores risk
+                                      └─► [4] detectFraud  — rule-based scoring (debt ratio, CURP, age, duplicates)
                                             └─► Step Functions (fraud_risk_level)
                                                   ├─ HIGH  → AutoReject
                                                   ├─ MEDIUM → [5] approvalNotifier (senior)
@@ -42,7 +42,7 @@ S3 upload (incoming bucket)
                                                                                   └─► [7] notificationSender — SES email
 ```
 
-**API Lambdas (REST):** listApplications · getApplication · getAnalytics · submitApplication · healthCheck
+**API Lambdas (REST):** listApplications · getApplication · getApplicationStatus · getAnalytics · submitApplication · authRegister · authLogin · healthCheck
 
 ---
 
@@ -94,14 +94,25 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 
 ---
 
-## Current Technical Debt (as of project start)
+## Deployed Infrastructure
 
-- No unit tests yet — coverage target 80% before any Lambda deploy
-- No Cognito auth yet — API Gateway has `DefaultAuthorizer: NONE`
-- Frontend (`frontend/src/`) uses mock/hardcoded data — real API wiring in Week 3
+- **Frontend:** `www.bancafiel.com` — React + Vite → S3 + CloudFront (`E3Q95XT9PA3Z2K`)
+- **API:** `https://nfgxyb0os2.execute-api.us-east-1.amazonaws.com/dev`
+- **DB:** `bancafiel-postgres-dev.cyhm06yo4hhg.us-east-1.rds.amazonaws.com`
+- **S3 Incoming:** `bancafiel-incoming-466901690437-dev`
+- **Vite proxy:** In dev, `API_URL = ''` — all `/api/*` calls go through Vite proxy to API Gateway (fixes Safari cross-origin block on localhost)
+- **Auth:** Custom `client_accounts` table in RDS — PBKDF2 hashing, session tokens. Cognito will NOT be implemented.
+- **Fraud detection:** Rule-based Lambda (`detectFraud`) — AWS Fraud Detector not implemented (decided against it)
+- **SES:** Sandbox — `bancafiel.noreply@gmail.com` verified. Production access request pending.
+- **HTTPS:** Enforced via CloudFront — HTTP → HTTPS (301), API path is https-only
+
+## Current Technical Debt
+
+- API Gateway has `DefaultAuthorizer: NONE` — analyst dashboard has no server-side auth (UI separation only, no Cognito)
 - DB passwords in `samconfig.toml` — migrate to Secrets Manager before prod
-- CORS `AllowOrigin: '*'` — acceptable for dev, lock down for prod
+- CORS `AllowOrigin: '*'` — lock down to `bancafiel.com` before prod
 - `DBPassword=BancaFiel2024Secure!` is in samconfig.toml — **never commit samconfig.toml to public repo**
+- Unit tests still missing for `processDocument`, `validateData`, `extractData` (Montse)
 
 ## Test Coverage Progress
 
@@ -118,9 +129,13 @@ Examples: `bancafiel-processDocument-dev`, `bancafiel-extractData-dev`
 **Other open items:**
 - ~~Health endpoint bug~~ — fixed by Lizet ✅
 - ~~Analytics tests~~ — done by Lizet ✅
-- AWS Fraud Detector not yet configured in console (Santiago)
-- ~~SES sender~~ — `bancafiel.noreply@gmail.com` verified in us-east-1 ✅ (dev)
-- Frontend API wiring — Fernando 🔲 see `docs/technical/FRONTEND_WIRING.md`
+- ~~AWS Fraud Detector~~ — decided not to implement; rule-based Lambda used instead ✅
+- ~~SES sender~~ — `bancafiel.noreply@gmail.com` verified in us-east-1 ✅ (sandbox)
+- ~~Frontend API wiring~~ — Fernando ✅ merged to dev
+- ~~Card reveal animation + approved dashboard~~ — Fernando ✅ merged to dev
+- ~~Client auth system~~ — register/login wired end-to-end ✅
+- ~~Domain deploy~~ — `www.bancafiel.com` live on CloudFront ✅
+- SES production access — pending AWS approval (university project use case submitted)
 
 ---
 

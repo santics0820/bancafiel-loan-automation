@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:analyst": "vite --config vite.analyst.config.js",
     "build": "vite build",
+    "build:analyst": "vite build --config vite.analyst.config.js",
+    "build:all": "npm run build && npm run build:analyst",
     "preview": "vite preview"
   },
   "dependencies": {
