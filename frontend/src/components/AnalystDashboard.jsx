@@ -91,6 +91,7 @@ function AnalystDashboard({ active }) {
   const [loading,         setLoading]         = useState(true)
   const [currentView,     setCurrentView]     = useState('applications')
   const [actionError,     setActionError]     = useState(null)
+  const [actionLoading,   setActionLoading]   = useState(false)
   const [statusFilter,    setStatusFilter]    = useState('all')
 
   const applications = statusFilter === 'all'
@@ -161,8 +162,9 @@ function AnalystDashboard({ active }) {
   }
 
   const handleApprove = async () => {
-    if (!selectedApp) return
+    if (!selectedApp || actionLoading) return
     setActionError(null)
+    setActionLoading(true)
     try {
       const res = await fetch(`${API_URL}/api/loans/${selectedApp.id}/approve`, {
         method: 'POST',
@@ -170,16 +172,19 @@ function AnalystDashboard({ active }) {
         body: JSON.stringify({ approvedBy: 'analyst', notes: 'Aprobado desde dashboard' }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      removeApp(selectedApp.id)
+      setSelectedApp(prev => ({ ...prev, status: 'approved' }))
+      setAllApplications(prev => prev.map(a => a.id === selectedApp.id ? { ...a, status: 'approved' } : a))
     } catch (err) {
       console.error(err)
       setActionError('Error al aprobar. Intenta de nuevo.')
     }
+    setActionLoading(false)
   }
 
   const handleReject = async () => {
-    if (!selectedApp) return
+    if (!selectedApp || actionLoading) return
     setActionError(null)
+    setActionLoading(true)
     try {
       const res = await fetch(`${API_URL}/api/loans/${selectedApp.id}/reject`, {
         method: 'POST',
@@ -187,11 +192,13 @@ function AnalystDashboard({ active }) {
         body: JSON.stringify({ rejectedBy: 'analyst', reason: 'Rechazado desde dashboard' }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      removeApp(selectedApp.id)
+      setSelectedApp(prev => ({ ...prev, status: 'rejected' }))
+      setAllApplications(prev => prev.map(a => a.id === selectedApp.id ? { ...a, status: 'rejected' } : a))
     } catch (err) {
       console.error(err)
       setActionError('Error al rechazar. Intenta de nuevo.')
     }
+    setActionLoading(false)
   }
 
   if (!active) return null
@@ -361,9 +368,9 @@ function AnalystDashboard({ active }) {
 
               {selectedApp.status === 'processing' && (
                 <div className="action-row">
-                  <button className="action-btn reject" onClick={handleReject}>RECHAZAR</button>
+                  <button className="action-btn reject" onClick={handleReject} disabled={actionLoading} style={{ opacity: actionLoading ? 0.4 : 1 }}>RECHAZAR</button>
                   <button className="action-btn secondary">SOLICITAR DOCS</button>
-                  <button className="action-btn liquid-btn" onClick={handleApprove}>APROBAR</button>
+                  <button className="action-btn liquid-btn" onClick={handleApprove} disabled={actionLoading} style={{ opacity: actionLoading ? 0.4 : 1 }}>{actionLoading ? '…' : 'APROBAR'}</button>
                 </div>
               )}
               {selectedApp.status === 'approved' && (
