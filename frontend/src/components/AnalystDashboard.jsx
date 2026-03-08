@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './AnalystDashboard.css'
 import Logo from './Logo'
 import Overview from './Overview'
@@ -93,6 +93,8 @@ function AnalystDashboard({ active }) {
   const [actionError,     setActionError]     = useState(null)
   const [actionLoading,   setActionLoading]   = useState(false)
   const [statusFilter,    setStatusFilter]    = useState('all')
+  const [filterOpen,      setFilterOpen]      = useState(false)
+  const filterDropdownRef = useRef(null)
 
   const applications = statusFilter === 'all'
     ? allApplications
@@ -123,6 +125,16 @@ function AnalystDashboard({ active }) {
     if (!active) return
     fetchAll()
   }, [active])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target)) {
+        setFilterOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const handleSelectApp = async (app) => {
     setSelectedApp(app)
@@ -241,19 +253,40 @@ function AnalystDashboard({ active }) {
           <div className="list-panel glass-panel">
             <div className="list-header">
               <input type="text" className="search-bar" placeholder="Buscar ID de solicitud..." />
-              <div className="filter-row">
-                {STATUS_FILTERS.map(f => (
-                  <span
-                    key={f.value}
-                    className={`filter-chip ${statusFilter === f.value ? 'active' : ''}`}
-                    style={statusFilter === f.value && f.value !== 'all'
-                      ? { color: statusColors[f.value], borderColor: statusColors[f.value] }
-                      : {}}
-                    onClick={() => { setStatusFilter(f.value); setSelectedApp(null) }}
-                  >
-                    {f.label}
+              <div className="filter-dropdown" ref={filterDropdownRef}>
+                <button
+                  className="filter-dropdown-trigger"
+                  onClick={() => setFilterOpen(o => !o)}
+                >
+                  <span style={{ color: statusFilter !== 'all' ? statusColors[statusFilter] : 'var(--text-primary)' }}>
+                    {STATUS_FILTERS.find(f => f.value === statusFilter)?.label}
                   </span>
-                ))}
+                  <svg
+                    width="12" height="12" viewBox="0 0 12 12" fill="none"
+                    style={{ transform: filterOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                  >
+                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </button>
+                {filterOpen && (
+                  <div className="filter-dropdown-menu glass-panel">
+                    {STATUS_FILTERS.map(f => (
+                      <div
+                        key={f.value}
+                        className={`filter-dropdown-item ${statusFilter === f.value ? 'active' : ''}`}
+                        onClick={() => { setStatusFilter(f.value); setSelectedApp(null); setFilterOpen(false) }}
+                      >
+                        <span
+                          className="filter-dot"
+                          style={{ background: f.value !== 'all' ? statusColors[f.value] : 'transparent', border: f.value === 'all' ? '1px solid var(--glass-border)' : 'none' }}
+                        />
+                        <span style={{ color: f.value !== 'all' ? statusColors[f.value] : 'var(--text-primary)' }}>
+                          {f.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <div className="app-list">
