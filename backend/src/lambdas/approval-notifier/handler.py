@@ -71,26 +71,92 @@ def handle_notify_approver(event):
         frontend_url = os.environ.get('FRONTEND_URL', 'https://bancafiel.com')
 
         if approver_email:
-            customer_name = app['full_name'] if app else 'Unknown'
-            loan_amount = f"${app['loan_amount']:,.2f} MXN" if app else 'N/A'
-            risk = f"{app['fraud_risk_level']} (score: {app['fraud_score']})" if app else 'N/A'
+            customer_name = app['full_name'].title() if app else 'Unknown'
+            loan_amount_fmt = f"${float(app['loan_amount']):,.0f} MXN" if app else 'N/A'
+            risk_level = (app['fraud_risk_level'] or 'low').lower() if app else 'low'
+            risk_score = app['fraud_score'] if app else 0
+            risk_color = '#f87171' if risk_level == 'high' else '#fbbf24' if risk_level in ('medium', 'med') else '#6ee7b7'
+            risk_label = 'ALTO' if risk_level == 'high' else 'MEDIO' if risk_level in ('medium', 'med') else 'BAJO'
             review_url = f"{frontend_url}/dashboard/applications/{application_id}"
+            short_id = str(application_id)[:8].upper()
+
+            html_body = f"""<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#05070a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#05070a;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="580" cellpadding="0" cellspacing="0" border="0" style="max-width:580px;width:100%;">
+        <!-- Logo -->
+        <tr><td align="center" style="padding-bottom:28px;">
+          <table cellpadding="0" cellspacing="0" border="0"><tr>
+            <td valign="middle" style="padding-right:10px;">
+              <div style="width:32px;height:32px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#f1f5f9 0%,#cbd5e1 35%,#64748b 65%,#334155 100%);box-shadow:0 4px 16px rgba(148,163,184,0.35);"></div>
+            </td>
+            <td valign="middle"><span style="font-size:22px;font-weight:800;letter-spacing:0.06em;color:#ffffff;">BANCAFIEL</span></td>
+          </tr></table>
+        </td></tr>
+        <!-- Card -->
+        <tr><td style="background:#0f1218;border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:40px;box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+          <!-- Badge -->
+          <div style="display:inline-block;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);border-radius:100px;padding:6px 16px;margin-bottom:20px;">
+            <span style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#fbbf24;">⚡ &nbsp;Requiere revisión</span>
+          </div>
+          <h1 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#ffffff;">Nueva solicitud pendiente</h1>
+          <p style="margin:0 0 28px;font-size:15px;color:#94a3b8;line-height:1.6;">Se recibió una nueva solicitud de crédito que requiere tu aprobación.</p>
+          <!-- Details -->
+          <table width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr><td style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;">Cliente</td>
+                <td align="right" style="font-size:14px;font-weight:700;color:#ffffff;">{customer_name}</td>
+              </tr></table>
+            </td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;">Monto solicitado</td>
+                <td align="right" style="font-size:14px;font-weight:700;color:#ffffff;">{loan_amount_fmt}</td>
+              </tr></table>
+            </td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;">Riesgo de fraude</td>
+                <td align="right" style="font-size:14px;font-weight:700;color:{risk_color};">{risk_label} ({risk_score})</td>
+              </tr></table>
+            </td></tr>
+            <tr><td style="padding:8px 0;">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+                <td style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em;color:#64748b;">Folio</td>
+                <td align="right" style="font-size:14px;font-weight:700;color:#e2e8f0;">{short_id}</td>
+              </tr></table>
+            </td></tr>
+          </table>
+          <!-- CTA -->
+          <div style="text-align:center;margin-top:32px;">
+            <a href="{review_url}" style="display:inline-block;background:linear-gradient(135deg,#e2e8f0 0%,#94a3b8 100%);color:#0f172a;font-size:14px;font-weight:800;letter-spacing:0.04em;text-decoration:none;padding:16px 40px;border-radius:14px;">
+              Revisar solicitud →
+            </a>
+          </div>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td align="center" style="padding-top:28px;">
+          <p style="margin:0;font-size:12px;color:#475569;line-height:1.6;">
+            BancaFiel — Sistema interno de crédito.<br/>
+            <a href="mailto:soporte@bancafiel.com" style="color:#60a5fa;text-decoration:none;">soporte@bancafiel.com</a>
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
             ses_client.send_email(
                 Source=sender_email,
                 Destination={'ToAddresses': [approver_email]},
                 Message={
-                    'Subject': {'Data': '[BancaFiel] Nueva solicitud pendiente de revisión'},
-                    'Body': {
-                        'Text': {'Data': (
-                            f"Tienes una nueva solicitud de crédito para revisar.\n\n"
-                            f"Cliente: {customer_name}\n"
-                            f"Monto solicitado: {loan_amount}\n"
-                            f"Riesgo de fraude: {risk}\n\n"
-                            f"Revisar solicitud: {review_url}\n\n"
-                            f"— BancaFiel Sistema de Crédito"
-                        )}
-                    }
+                    'Subject': {'Data': f'[BancaFiel] Nueva solicitud — {customer_name}', 'Charset': 'UTF-8'},
+                    'Body': {'Html': {'Data': html_body, 'Charset': 'UTF-8'}},
                 }
             )
 
