@@ -150,7 +150,10 @@ function ClientPortal({ active }) {
         body: JSON.stringify({ email, password: authPassword }),
       })
       const data = await res.json()
-      if (!res.ok) { setAuthError(data.error || 'Error al autenticar'); setAuthLoading(false); return }
+      if (!res.ok) {
+        const msg = (typeof data.error === 'string' && data.error) ? data.error : 'Correo o contraseña incorrectos'
+        setAuthError(msg); setAuthLoading(false); return
+      }
 
       localStorage.setItem('bf_token', data.token)
       localStorage.setItem('bf_email', data.email)
@@ -400,7 +403,13 @@ function ClientPortal({ active }) {
           </div>
 
           {authError && (
-            <p style={{ color: '#f87171', fontSize: '13px', textAlign: 'center', marginTop: '4px' }}>{authError}</p>
+            <div className="auth-error-box">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                <circle cx="8" cy="8" r="7" stroke="#f87171" strokeWidth="1.5"/>
+                <path d="M8 4.5v4M8 10.5v1" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              {String(authError)}
+            </div>
           )}
 
           {/* Step 1 for new: just validate email and advance */}
