@@ -269,6 +269,35 @@
   width: 100%;
 }
 
+.auth-error-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 10px;
+  padding: 12px 14px;
+  text-align: left;
+  color: #f87171;
+  -webkit-text-fill-color: #f87171;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  font-family: var(--font-main);
+}
+
+.auth-error-text {
+  margin: 0;
+  color: #f87171 !important;
+  -webkit-text-fill-color: #f87171 !important;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  font-family: var(--font-main);
+}
+
 .auth-back-link {
   background: none;
   border: none;
