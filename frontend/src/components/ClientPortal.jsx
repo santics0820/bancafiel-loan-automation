@@ -134,7 +134,12 @@ function ClientPortal({ active }) {
   const [authStep,      setAuthStep]      = useState('email') // 'email' | 'password'
   const [trackingData,  setTrackingData]  = useState(null)
   const [trackingLoading, setTrackingLoading] = useState(false)
-  const fileInputRef = useRef(null)
+  const [dobDay,        setDobDay]        = useState('')
+  const [dobMonth,      setDobMonth]      = useState('')
+  const [dobYear,       setDobYear]       = useState('')
+  const fileInputRef    = useRef(null)
+  const dobMonthRef     = useRef(null)
+  const dobYearRef      = useRef(null)
 
   const authValid = email.includes('@') && email.includes('.')
   const canSignIn = authValid && authPassword.length >= 6
@@ -218,6 +223,7 @@ function ClientPortal({ active }) {
           applicationType: 'CREDIT_CARD',
           monthlyIncome:  incomeRangeToNumber(incomeRange),
           existingDebt:   0,
+          dateOfBirth:    `${dobYear}-${dobMonth.padStart(2,'0')}-${dobDay.padStart(2,'0')}`,
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -532,7 +538,7 @@ function ClientPortal({ active }) {
             </div>
           </div>
 
-          <button className="liquid-btn kyc-cta" onClick={() => setStep('kyc')}>
+          <button className="liquid-btn kyc-cta" onClick={() => setStep('dob')}>
             Comenzar verificación →
           </button>
 
@@ -541,6 +547,90 @@ function ClientPortal({ active }) {
           </button>
         </div>
       )}
+
+      {/* ── FECHA DE NACIMIENTO ── */}
+      {step === 'dob' && (() => {
+        const dayOk   = dobDay.length >= 1   && parseInt(dobDay)   >= 1  && parseInt(dobDay)   <= 31
+        const monthOk = dobMonth.length >= 1 && parseInt(dobMonth) >= 1  && parseInt(dobMonth) <= 12
+        const yearOk  = dobYear.length === 4 && parseInt(dobYear)  >= 1900 && parseInt(dobYear) <= new Date().getFullYear() - 17
+        const dobValid = dayOk && monthOk && yearOk
+        return (
+          <div className="kyc-card glass-panel">
+            <div className="kyc-intro">
+              <h1>¿Cuál es tu fecha de nacimiento?</h1>
+              <p>Necesitamos verificar que seas mayor de 18 años.</p>
+            </div>
+
+            <div className="dob-fields">
+              <div className="dob-field-wrap">
+                <label className="dob-label">Día</label>
+                <input
+                  className="dob-input"
+                  type="number"
+                  placeholder="DD"
+                  min={1} max={31}
+                  maxLength={2}
+                  value={dobDay}
+                  autoFocus
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,2)
+                    setDobDay(v)
+                    if (v.length === 2) dobMonthRef.current?.focus()
+                  }}
+                />
+              </div>
+              <span className="dob-sep">/</span>
+              <div className="dob-field-wrap">
+                <label className="dob-label">Mes</label>
+                <input
+                  className="dob-input"
+                  type="number"
+                  placeholder="MM"
+                  min={1} max={12}
+                  maxLength={2}
+                  ref={dobMonthRef}
+                  value={dobMonth}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,2)
+                    setDobMonth(v)
+                    if (v.length === 2) dobYearRef.current?.focus()
+                  }}
+                />
+              </div>
+              <span className="dob-sep">/</span>
+              <div className="dob-field-wrap">
+                <label className="dob-label">Año</label>
+                <input
+                  className="dob-input dob-input--year"
+                  type="number"
+                  placeholder="AAAA"
+                  min={1900}
+                  maxLength={4}
+                  ref={dobYearRef}
+                  value={dobYear}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,4)
+                    setDobYear(v)
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!dobValid}
+              style={{ opacity: dobValid ? 1 : 0.35, cursor: dobValid ? 'pointer' : 'not-allowed' }}
+              onClick={() => setStep('kyc')}
+            >
+              Continuar →
+            </button>
+
+            <button className="auth-back-link" onClick={() => setStep('kyc-notice')}>
+              ← Volver
+            </button>
+          </div>
+        )
+      })()}
 
       {/* ── KYC CAMERA ── */}
       {step === 'kyc' && (
