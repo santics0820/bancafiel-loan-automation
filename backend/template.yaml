@@ -377,15 +377,14 @@ Resources:
       Environment:
         Variables:
           DETECT_FRAUD_FUNCTION: !Sub bancafiel-detectFraud-${Environment}
-          SENDER_EMAIL: 'noreply@bancafiel.com'
+          NOTIFICATION_SENDER_FUNCTION: !Sub bancafiel-notificationSender-${Environment}
       Policies:
         - Statement:
             - Effect: Allow
               Action: lambda:InvokeFunction
-              Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-detectFraud-${Environment}
-            - Effect: Allow
-              Action: ses:SendEmail
-              Resource: '*'
+              Resource:
+                - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-detectFraud-${Environment}
+                - !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:bancafiel-notificationSender-${Environment}
 
   # ============================================
   # LAMBDA #4: detectFraud

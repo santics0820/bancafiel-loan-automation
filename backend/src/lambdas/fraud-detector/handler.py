@@ -39,6 +39,15 @@ def handler(event, context):
         if not app_data:
             return {'statusCode': 404, 'body': json.dumps({'error': 'Application not found'})}
 
+        # Guard: skip if fraud check already completed (prevents double execution)
+        already_done = execute_query_single(
+            "SELECT id FROM application_history WHERE application_id = %s AND action = 'fraud_check_completed'",
+            (application_id,)
+        )
+        if already_done:
+            log_event(logger, 'detectFraud_skipped_duplicate', {'application_id': application_id})
+            return {'statusCode': 200, 'body': json.dumps({'message': 'Already processed'})}
+
         # Try AWS Fraud Detector, fallback to rule-based
         fraud_score, risk_level, reasons = run_fraud_detection(app_data, application_id)
         dup_count = count_duplicate_applications(app_data['customer_id'], application_id)

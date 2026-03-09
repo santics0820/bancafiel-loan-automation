@@ -19,7 +19,6 @@ except ImportError:
 
 logger = setup_logger(__name__)
 lambda_client = boto3.client('lambda')
-ses_client = boto3.client('ses', region_name='us-east-1')
 
 
 def handler(event, context):
@@ -112,39 +111,16 @@ def handler(event, context):
                 WHERE id = %s
             """, (customer_id, datetime.now(UTC), application_id))
 
-        # 4b. Send confirmation email to applicant (only when INE processed — has the name)
-        if customer_id and applicant_email and data.get('full_name'):
+        # 4b. Send HTML confirmation email via notificationSender (only when INE processed — has the name)
+        if customer_id and application_id and data.get('full_name'):
             try:
-                sender = os.environ.get('SENDER_EMAIL', 'noreply@bancafiel.com')
-                short_folio = application_id[:8].upper() if application_id else 'N/A'
-                app_data = execute_query_single(
-                    "SELECT loan_amount, application_type FROM applications WHERE id = %s",
-                    (application_id,)
+                notification_fn = os.environ.get('NOTIFICATION_SENDER_FUNCTION', 'bancafiel-notificationSender-dev')
+                lambda_client.invoke(
+                    FunctionName=notification_fn,
+                    InvocationType='Event',
+                    Payload=json.dumps({'application_id': application_id, 'type': 'received'})
                 )
-                loan_amount = f"${app_data['loan_amount']:,.2f} MXN" if app_data else 'N/A'
-                app_type = 'Crédito' if app_data and app_data['application_type'] == 'CREDIT_CARD' else 'Préstamo'
-
-                ses_client.send_email(
-                    Source=sender,
-                    Destination={'ToAddresses': [applicant_email]},
-                    Message={
-                        'Subject': {'Data': f'[BancaFiel] Tu solicitud fue recibida — Folio {short_folio}'},
-                        'Body': {'Text': {'Data': (
-                            f"Hola {data['full_name'].title()},\n\n"
-                            f"Hemos recibido y validado tu solicitud de {app_type}.\n\n"
-                            f"Folio: {short_folio}\n"
-                            f"Monto solicitado: {loan_amount}\n"
-                            f"Estado: En revisión\n\n"
-                            f"Un analista revisará tu solicitud en un máximo de 2 horas "
-                            f"y te notificaremos el resultado a este correo.\n\n"
-                            f"— BancaFiel Sistema de Crédito"
-                        )}}
-                    }
-                )
-                log_event(logger, 'applicant_confirmation_sent', {
-                    'application_id': application_id,
-                    'email': applicant_email
-                })
+                log_event(logger, 'applicant_confirmation_queued', {'application_id': application_id})
             except Exception as e:
                 log_error(logger, 'applicant_email_failed', e)
 
@@ -161,13 +137,15 @@ def handler(event, context):
             'errors': validation['errors']
         })
 
-        # 6. Trigger fraud detection
-        detect_fraud_fn = os.environ.get('DETECT_FRAUD_FUNCTION', 'bancafiel-detectFraud-dev')
-        lambda_client.invoke(
-            FunctionName=detect_fraud_fn,
-            InvocationType='Event',
-            Payload=json.dumps({'application_id': application_id})
-        )
+        # 6. Trigger fraud detection — only from INE document (must contain CURP)
+        # Proof of address does not contain CURP, so triggering from it would run the pipeline twice
+        if curp and customer_id:
+            detect_fraud_fn = os.environ.get('DETECT_FRAUD_FUNCTION', 'bancafiel-detectFraud-dev')
+            lambda_client.invoke(
+                FunctionName=detect_fraud_fn,
+                InvocationType='Event',
+                Payload=json.dumps({'application_id': application_id})
+            )
 
         return {
             'statusCode': 200,
