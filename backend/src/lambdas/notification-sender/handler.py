@@ -117,7 +117,6 @@ def _html_received(name: str, amount: float, app_id: str) -> str:
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         {_detail_row('Folio', app_id, '#e2e8f0')}
         {_detail_row('Estado', 'En proceso', '#fbbf24')}
-        {_detail_row('Tiempo estimado', 'Máximo 2 horas', '#94a3b8')}
       </table>
 
       <p style="margin:28px 0 0;font-size:14px;color:#94a3b8;line-height:1.7;">
