@@ -77,6 +77,26 @@
   flex-shrink: 0;
 }
 
+/* ── Error de cámara ────────────────────────────────────── */
+.ine-camera-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 24px;
+  text-align: center;
+  background: #000;
+}
+
+.ine-camera-error p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #f87171;
+  font-family: var(--font-main);
+  line-height: 1.5;
+}
+
 /* ── Área de cámara ─────────────────────────────────────── */
 .ine-camera {
   position: relative;
@@ -134,16 +154,21 @@
   border-radius: 0 4px 0 0;
 }
 
-/* Guía rostro — 42% ancho, elipse de retrato (0.73 ratio)
+/* Guía rostro — 62% ancho, elipse de retrato (0.73 ratio)
    Mismos porcentajes que el JS de crop */
 .face-guide {
   position: relative;
-  width: 42%;
+  width: 62%;
   aspect-ratio: 0.73;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.52);
   pointer-events: none;
+}
+
+/* Face mode — portrait container so the selfie fills naturally */
+.ine-camera.face-mode {
+  aspect-ratio: 3 / 4;
 }
 
 /* ── Barra de instrucciones + acciones ──────────────────── */
@@ -242,4 +267,47 @@
   height: 100%;
   object-fit: contain;
   display: block;
+}
+
+/* ── Mobile responsive ───────────────────────────────────── */
+@media (max-width: 640px) {
+  .ine-scanner {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .ine-steps {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .ine-step {
+    font-size: 0.6rem;
+  }
+
+  /* Camera taller on portrait mobile — give more room for card */
+  .ine-camera {
+    aspect-ratio: 4 / 3;
+  }
+
+  /* Face mode already portrait, keep it taller on mobile */
+  .ine-camera.face-mode {
+    aspect-ratio: 3 / 4;
+  }
+
+  .ine-actions {
+    padding: 16px 16px;
+    gap: 12px;
+  }
+
+  .ine-instruction-text {
+    font-size: 0.78rem;
+  }
+
+  .ine-btn-primary,
+  .ine-btn-reject {
+    padding: 14px 16px;
+    font-size: 0.8rem;
+  }
 }
