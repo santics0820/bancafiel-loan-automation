@@ -751,16 +751,7 @@ function ClientPortal({ active }) {
       {/* ── LOADING ── */}
       {step === 'loading' && (
         <div className="kyc-card glass-panel kyc-complete-card">
-          <div className="check-ring" style={{ opacity: 0.6 }}>
-            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-              <circle cx="32" cy="32" r="30" stroke="#60a5fa" strokeWidth="1.5" opacity="0.3"/>
-              <path d="M32 8 A24 24 0 0 1 56 32"
-                stroke="#60a5fa" strokeWidth="2.5"
-                strokeLinecap="round"
-                style={{ animation: 'spin 1s linear infinite', transformOrigin: '32px 32px' }}
-              />
-            </svg>
-          </div>
+          <div className="submit-spinner" />
           <p className="complete-label">Enviando solicitud…</p>
         </div>
       )}
@@ -781,7 +772,7 @@ function ClientPortal({ active }) {
             Folio: {applicationId?.slice(0, 8).toUpperCase()}
           </p>
           <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '8px', textAlign: 'center' }}>
-            Te notificaremos a <strong>{email}</strong> en máximo 2 horas.
+            Te notificaremos a <strong>{email}</strong> con el resultado.
           </p>
           <button className="liquid-btn kyc-cta" onClick={handleShowTracking}
             disabled={trackingLoading}
