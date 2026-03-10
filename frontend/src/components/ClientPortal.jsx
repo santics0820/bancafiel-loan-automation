@@ -290,7 +290,6 @@ function ClientPortal({ active }) {
         await fetch(data.uploadUrls.ine.url, {
           method: 'PUT',
           body: capturedINEFile,
-          headers: { 'Content-Type': 'image/jpeg' },
         })
       }
 
@@ -299,7 +298,6 @@ function ClientPortal({ active }) {
         await fetch(data.uploadUrls.proof_of_address.url, {
           method: 'PUT',
           body: uploadedFile,
-          headers: { 'Content-Type': uploadedFile.type },
         })
       }
 
