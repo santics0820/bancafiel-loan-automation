@@ -151,11 +151,11 @@ def rule_based_fraud_score(app_data):
     score = 100
     reasons = []
 
-    # Rule 1: Debt-to-income ratio
+    # Rule 1: Existing debt-to-income ratio (debt generated from Buró score at submission)
     income = float(app_data.get('monthly_income') or 0)
-    loan_amount = float(app_data.get('loan_amount') or 0)
+    existing_debt = float(app_data.get('existing_debt') or 0)
     if income > 0:
-        dti = loan_amount / (income * 12)
+        dti = existing_debt / (income * 12)
         if dti > 0.6:
             score += 300
             reasons.append('high_debt_to_income_ratio')

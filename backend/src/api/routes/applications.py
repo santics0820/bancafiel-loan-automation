@@ -230,6 +230,19 @@ def submit_application(event, context):
         # Create application record (customer linked later after OCR)
         verified_curp = (body.get('verifiedCurp') or '').strip().upper() or None
         credit_score  = random.randint(400, 850)
+        monthly_income = float(body.get('monthlyIncome') or 0)
+        annual_income  = monthly_income * 12
+
+        # Generate existing_debt coherent with Buró credit score band
+        if credit_score >= 750:        # Excelente: 0–15% of annual income
+            debt_ratio = random.uniform(0.00, 0.15)
+        elif credit_score >= 650:      # Bueno: 15–35%
+            debt_ratio = random.uniform(0.15, 0.35)
+        elif credit_score >= 550:      # Regular: 35–55%
+            debt_ratio = random.uniform(0.35, 0.55)
+        else:                          # Malo: 55–90%
+            debt_ratio = random.uniform(0.55, 0.90)
+        existing_debt = round(annual_income * debt_ratio, 2) if annual_income > 0 else 0.0
 
         result = execute_query("""
             INSERT INTO applications
@@ -240,8 +253,8 @@ def submit_application(event, context):
         """, (
             application_type,
             loan_amount,
-            float(body.get('monthlyIncome') or 0),
-            float(body.get('existingDebt') or 0),
+            monthly_income,
+            existing_debt,
             body.get('applicantName'),
             body.get('applicantEmail'),
             body.get('applicantPhone'),
