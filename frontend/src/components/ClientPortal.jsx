@@ -101,6 +101,8 @@ const INCOME_RANGES = [
   { key: '50+',   label: '$50k+' },
 ]
 
+const REAPPLY_LOCK_DAYS = 90
+
 function computeCredit(type, range) {
   const mult = { asalariado: 1, independiente: 0.9, empresario: 1.3, pensionado: 0.75, estudiante: 0.5, sin_ingresos: 0.35 }
   const base = { '5-15': 12000, '15-30': 30000, '30-50': 55000, '50+': 90000 }
@@ -150,6 +152,7 @@ function ClientPortal({ active }) {
 
   const authValid = email.includes('@') && email.includes('.')
   const canSignIn = authValid && authPassword.length >= 6
+  const getRejectionSeenKey = (userEmail, folio) => `bf_rejection_seen_${String(userEmail || '').toLowerCase()}_${String(folio || '').toUpperCase()}`
 
   const handleAuth = async () => {
     setAuthError(null)
@@ -181,12 +184,13 @@ function ClientPortal({ active }) {
             const statusData = await statusRes.json()
             const isRejected = statusData.status === 'REJECTED' || statusData.status === 'AUTO_REJECTED'
             if (isRejected) {
-              const seenKey = `bf_rejection_seen_${data.folio}`
+              const seenKey = getRejectionSeenKey(data.email, data.folio)
               if (localStorage.getItem(seenKey)) {
-                // Already saw rejection screen — start fresh application
-                setStep('kyc-notice')
+                // Already saw rejection screen once — show blocked re-apply view
+                setStep('reapply-blocked')
               } else {
                 // First time seeing rejection — show the red X screen
+                localStorage.setItem(seenKey, '1')
                 setTrackingData(statusData)
                 setStep('tracking')
               }
@@ -543,6 +547,32 @@ function ClientPortal({ active }) {
       )}
 
       {/* ── KYC NOTICE ── */}
+      {step === 'reapply-blocked' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="check-ring">
+            <svg className="blocked-reject-icon" width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle className="blocked-reject-circle" cx="32" cy="32" r="30" />
+              <path className="blocked-reject-x" d="M22 22L42 42M42 22L22 42" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <p className="complete-label" style={{ color: '#f87171', opacity: 1, animation: 'none' }}>No disponible por ahora</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center' }}>
+            Intenta de nuevo en 90 dias.
+          </p>
+          <button
+            className="liquid-btn kyc-cta"
+            disabled={true}
+            style={{ opacity: 0.35, cursor: 'not-allowed' }}
+          >
+            Solicitar Nueva Tarjeta
+          </button>
+          <p className="blocked-days-left">{REAPPLY_LOCK_DAYS} dias restantes</p>
+          <button className="auth-back-link blocked-switch-link" onClick={() => setStep('auth')}>
+            Cambiar cuenta
+          </button>
+        </div>
+      )}
+
       {step === 'kyc-notice' && (
         <div className="kyc-card glass-panel kyc-notice-card">
           <div className="kyc-notice-icons">
@@ -1079,8 +1109,9 @@ function ClientPortal({ active }) {
                       </svg>
                     )}
                     {s.status === 'rejected' && (
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                        <path d="M3 3 L11 11 M11 3 L3 11" stroke="currentColor" strokeWidth="1.8"
+                      <svg className="tracking-rejected-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <circle className="tracking-rejected-circle" cx="7" cy="7" r="5.5" />
+                        <path className="tracking-rejected-x" d="M4 4 L10 10 M10 4 L4 10"
                           strokeLinecap="round"/>
                       </svg>
                     )}
@@ -1097,15 +1128,11 @@ function ClientPortal({ active }) {
               ))}
             </div>
 
-            {isRejected && (() => {
-              // Mark as seen so next login goes straight to new application
-              if (applicationId) localStorage.setItem(`bf_rejection_seen_${applicationId}`, '1')
-              return (
-                <div className="rejection-banner">
-                  <p>Tu solicitud fue rechazada.</p>
-                </div>
-              )
-            })()}
+            {isRejected && (
+              <div className="rejection-banner">
+                <p>Tu solicitud fue rechazada.</p>
+              </div>
+            )}
 
             {isApproved && steps.every(s => s.status === 'done') && (
               <button className="liquid-btn kyc-cta card-reveal-trigger" onClick={() => setStep('card-reveal')}>

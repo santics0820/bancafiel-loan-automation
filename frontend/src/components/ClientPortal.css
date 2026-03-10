@@ -355,7 +355,31 @@
 .tracking-step.done   .tracking-node { background: rgba(110,231,183,.18); color: #6ee7b7; border: 1.5px solid rgba(110,231,183,.4); }
 .tracking-step.active .tracking-node { background: rgba(96,165,250,.15);  color: #60a5fa; border: 1.5px solid rgba(96,165,250,.5); }
 .tracking-step.pending .tracking-node { background: rgba(255,255,255,.04); color: transparent; border: 1.5px solid rgba(255,255,255,.12); }
-.tracking-step.rejected .tracking-node { background: rgba(248,113,113,.18); color: #f87171; border: 1.5px solid rgba(248,113,113,.4); }
+.tracking-step.rejected .tracking-node {
+  background: rgba(248,113,113,.18);
+  color: #f87171;
+  border: 2.6px solid rgba(248,113,113,.72);
+  animation: rejected-ring-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tracking-rejected-icon { overflow: visible; }
+.tracking-rejected-circle {
+  fill: none;
+  stroke: #f87171;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-dasharray: 36;
+  stroke-dashoffset: 36;
+  animation: rejected-circle-draw 0.62s ease forwards 0.16s;
+}
+.tracking-rejected-x {
+  stroke: #f87171;
+  stroke-width: 2.1;
+  opacity: 0;
+  transform: scale(0.86);
+  transform-origin: center;
+  animation: rejected-x-fade 0.24s ease forwards 0.82s;
+}
 
 .tracking-connector {
   grid-row: 2;
@@ -390,6 +414,46 @@
 .tracking-step.active  .tracking-badge { background: rgba(96,165,250,.12);  color: #60a5fa; }
 .tracking-step.pending .tracking-badge { background: rgba(255,255,255,.05); color: var(--text-secondary); }
 .tracking-step.rejected .tracking-badge { background: rgba(248,113,113,.12); color: #f87171; }
+
+.blocked-days-left {
+  margin: -2px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+.blocked-switch-link {
+  margin-top: -2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  opacity: 0.8;
+}
+
+.blocked-switch-link:hover {
+  opacity: 1;
+}
+
+.blocked-reject-icon {
+  overflow: visible;
+}
+
+.blocked-reject-circle {
+  fill: none;
+  stroke: #ff4d4f;
+  stroke-width: 3.8;
+  stroke-dasharray: 190;
+  stroke-dashoffset: 190;
+  animation: blocked-circle-draw 0.62s ease forwards;
+}
+
+.blocked-reject-x {
+  stroke: #ff4d4f;
+  stroke-width: 3.2;
+  opacity: 0;
+  transform: scale(0.9);
+  transform-origin: center;
+  animation: blocked-x-appear 0.2s ease forwards 0.68s;
+}
 
 .rejection-banner {
   background: rgba(248,113,113,.08);
@@ -428,6 +492,27 @@
 @keyframes pulse-dot {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: .4; transform: scale(.6); }
+}
+
+@keyframes rejected-circle-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes rejected-x-fade {
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes rejected-ring-pop {
+  0% { transform: scale(0.84); }
+  100% { transform: scale(1); }
+}
+
+@keyframes blocked-circle-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes blocked-x-appear {
+  to { opacity: 1; transform: scale(1); }
 }
 
 /* ===== CTA button ===== */
