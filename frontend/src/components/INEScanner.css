@@ -102,8 +102,6 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  max-height: 44vh;
-  flex-shrink: 1;
   line-height: 0;
   background: #000;
   overflow: hidden;
@@ -156,22 +154,15 @@
   border-radius: 0 4px 0 0;
 }
 
-/* Guía rostro — desktop: 38% width fits within landscape 44vh camera
-   Mobile overrides to 62% inside 3:4 portrait container */
+/* Guía rostro — 42% ancho, elipse de retrato (0.73 ratio) */
 .face-guide {
   position: relative;
-  width: 38%;
+  width: 42%;
   aspect-ratio: 0.73;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.52);
   pointer-events: none;
-}
-
-/* Face mode desktop — same landscape camera, no portrait ratio
-   (portrait + max-height + width:100% would ignore aspect-ratio) */
-.ine-camera.face-mode {
-  max-height: 44vh;
 }
 
 /* ── Barra de instrucciones + acciones ──────────────────── */
@@ -280,17 +271,17 @@
     border-right: none;
   }
 
-  /* Remove desktop max-height constraints on mobile */
+  /* Camera taller on portrait mobile */
   .ine-camera {
-    max-height: none;
+    aspect-ratio: 4 / 3;
   }
 
+  /* Selfie step: portrait camera on mobile */
   .ine-camera.face-mode {
     aspect-ratio: 3 / 4;
-    max-height: none;
   }
 
-  /* Larger oval on mobile — user can hold phone close */
+  /* Larger oval on mobile — easier to frame face */
   .face-guide {
     width: 62%;
   }
