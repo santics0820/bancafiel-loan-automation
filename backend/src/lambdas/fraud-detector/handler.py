@@ -212,7 +212,7 @@ def rule_based_fraud_score(app_data):
         score += 400
         reasons.append('recent_rejection_same_curp')
 
-    score = min(score, 1000)
+    score = min(score, 999)
     return score, score_to_risk(score), reasons
 
 

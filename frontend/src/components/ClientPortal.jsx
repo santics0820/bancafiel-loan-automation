@@ -140,6 +140,10 @@ function ClientPortal({ active }) {
   const [verifiedData,  setVerifiedData]  = useState(null)
   const [verifyLoading, setVerifyLoading] = useState(false)
   const [verifyError,   setVerifyError]   = useState(null)
+  const [editName,      setEditName]      = useState('')
+  const [editCurp,      setEditCurp]      = useState('')
+  const [editDob,       setEditDob]       = useState('')
+  const [editAddress,   setEditAddress]   = useState('')
   const fileInputRef    = useRef(null)
   const dobMonthRef     = useRef(null)
   const dobYearRef      = useRef(null)
@@ -227,6 +231,10 @@ function ClientPortal({ active }) {
           const data = await res.json()
           if (res.ok && data.success) {
             setVerifiedData(data)
+            setEditName(data.fields?.full_name || '')
+            setEditCurp(data.fields?.curp || '')
+            setEditDob(data.fields?.date_of_birth || '')
+            setEditAddress(data.fields?.address || '')
           } else {
             setVerifyError(data.error || 'No se pudo verificar tu INE.')
           }
@@ -702,62 +710,68 @@ function ClientPortal({ active }) {
                 Volver a escanear →
               </button>
             </>
-          ) : verifiedData ? (
-            /* Success — show extracted fields */
+          ) : verifiedData ? (() => {
+            const CURP_RE = /^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[A-Z0-9][0-9]$/
+            const curpEditValid = CURP_RE.test(editCurp.trim().toUpperCase())
+            return (
+            /* Success — editable fields */
             <>
               <div className="kyc-intro" style={{ gap: '4px' }}>
                 <h1 style={{ fontSize: '1.4rem' }}>Confirma tus datos</h1>
-                <p>Verifica que la información extraída de tu INE sea correcta.</p>
+                <p>Corrige cualquier campo si la lectura fue incorrecta.</p>
               </div>
 
-              <div className="credit-details">
-                {verifiedData.fields?.full_name && (
-                  <div className="credit-detail-row">
-                    <span>Nombre completo</span>
-                    <span className="detail-val" style={{ maxWidth: '60%', textAlign: 'right', fontSize: '0.78rem', lineHeight: 1.3 }}>
-                      {verifiedData.fields.full_name}
-                    </span>
-                  </div>
-                )}
-                <div className="credit-detail-row">
-                  <span>CURP</span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span className="detail-val" style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>
-                      {verifiedData.fields?.curp || '—'}
-                    </span>
-                    <span className={`curp-badge ${verifiedData.curp_valid ? 'curp-valid' : 'curp-warn'}`}>
-                      {verifiedData.curp_valid ? '✓' : '!'}
-                    </span>
-                  </span>
+              <div className="verify-edit-fields">
+                <div className="verify-edit-row">
+                  <label className="verify-edit-label">Nombre completo</label>
+                  <input
+                    className="verify-edit-input"
+                    type="text"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value.toUpperCase())}
+                    placeholder="APELLIDO PATERNO APELLIDO MATERNO NOMBRE"
+                  />
                 </div>
-                {verifiedData.fields?.date_of_birth && (
-                  <div className="credit-detail-row">
-                    <span>Fecha de nacimiento</span>
-                    <span className="detail-val">{verifiedData.fields.date_of_birth}</span>
-                  </div>
-                )}
-                {verifiedData.fields?.address && (
-                  <div className="credit-detail-row">
-                    <span>Domicilio</span>
-                    <span className="detail-val" style={{ maxWidth: '58%', textAlign: 'right', fontSize: '0.75rem', lineHeight: 1.3 }}>
-                      {verifiedData.fields.address}
+                <div className="verify-edit-row">
+                  <label className="verify-edit-label">
+                    CURP
+                    <span className={`curp-badge ${curpEditValid ? 'curp-valid' : 'curp-warn'}`} style={{ marginLeft: '6px' }}>
+                      {curpEditValid ? '✓' : '!'}
                     </span>
-                  </div>
-                )}
+                  </label>
+                  <input
+                    className="verify-edit-input verify-edit-mono"
+                    type="text"
+                    value={editCurp}
+                    maxLength={18}
+                    onChange={e => setEditCurp(e.target.value.toUpperCase().replace(/\s/g, ''))}
+                    placeholder="18 caracteres"
+                  />
+                </div>
+                <div className="verify-edit-row">
+                  <label className="verify-edit-label">Fecha de nacimiento</label>
+                  <input
+                    className="verify-edit-input"
+                    type="text"
+                    value={editDob}
+                    onChange={e => setEditDob(e.target.value)}
+                    placeholder="DD/MM/AAAA"
+                  />
+                </div>
+                <div className="verify-edit-row">
+                  <label className="verify-edit-label">Domicilio</label>
+                  <input
+                    className="verify-edit-input"
+                    type="text"
+                    value={editAddress}
+                    onChange={e => setEditAddress(e.target.value.toUpperCase())}
+                    placeholder="Calle, colonia, ciudad"
+                  />
+                </div>
               </div>
-
-              {verifiedData.warnings?.length > 0 && (
-                <div className="verify-warning-box">
-                  {verifiedData.warnings.map((w, i) => (
-                    <div key={i} className="verify-tip">
-                      <span>⚠️</span><span>{w}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <button className="liquid-btn kyc-cta" onClick={() => {
-                if (verifiedData.fields?.full_name) setCapturedName(verifiedData.fields.full_name)
+                if (editName) setCapturedName(editName)
                 setStep('complete')
               }}>
                 Confirmar y continuar →
@@ -770,7 +784,8 @@ function ClientPortal({ active }) {
                 ← Volver a escanear
               </button>
             </>
-          ) : null}
+            )
+          })() : null}
         </div>
       )}
 
