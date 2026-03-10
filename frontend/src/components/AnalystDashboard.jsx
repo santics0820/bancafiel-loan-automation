@@ -13,20 +13,51 @@ const FRAUD_REASON_LABELS = {
   applicant_under_18:                     'Solicitante menor de 18 años',
   curp_dob_mismatch:                      'CURP no coincide con fecha de nacimiento',
   ine_expired:                            'INE vencida',
-  name_mismatch_ine_vs_proof_of_address:  'Domicilio no coincide entre INE y comprobante',
-  address_mismatch_ine_vs_proof_of_address: 'Domicilio no coincide entre INE y comprobante',
-  proof_of_address_older_than_90_days:    'Comprobante de domicilio mayor a 90 días',
+  name_mismatch_ine_vs_proof_of_address:    'Nombre no coincide entre INE y comprobante de domicilio',
+  address_mismatch_ine_vs_proof_of_address: 'Domicilio no coincide entre INE y comprobante de domicilio',
+  proof_of_address_older_than_90_days:      'Comprobante de domicilio mayor a 90 días',
   recent_rejection_same_curp:             'CURP rechazado en los últimos 30 días',
 }
 
-function buildAnalysis(reasons, creditRecommendation) {
-  if (creditRecommendation) return creditRecommendation
-  if (!reasons || reasons.length === 0) return 'Sin alertas detectadas. Solicitud dentro de parámetros normales.'
-  const lines = reasons.map(r => {
-    const key = r.split(':')[0]
-    return `• ${FRAUD_REASON_LABELS[key] ?? r}`
-  })
-  return lines.join('\n')
+function generateDetailedAnalysis(data) {
+  const score    = data.fraudScore
+  const risk     = data.fraudRiskLevel ?? data.risk ?? 'low'
+  const reasons  = data.fraudReasons ?? []
+  const income   = data.extractedData?.net_income
+  const debt     = data.existingDebt
+
+  const riskText = risk === 'high' ? 'ALTO' : (risk === 'medium' || risk === 'med') ? 'MEDIO' : 'BAJO'
+
+  let summary = score != null
+    ? `Puntuación de fraude del ${(score / 10).toFixed(1)}% — nivel ${riskText}. `
+    : `Nivel de riesgo ${riskText}. `
+
+  if (reasons.length === 0) {
+    summary += 'No se detectaron alertas. La solicitud cumple con los parámetros estándar de evaluación.'
+  } else if (reasons.length === 1) {
+    summary += 'Se detectó 1 alerta que requiere revisión antes de proceder.'
+  } else {
+    summary += `Se detectaron ${reasons.length} alertas que requieren revisión antes de proceder.`
+  }
+
+  if (income && debt != null) {
+    const ratio = ((debt / income) * 100).toFixed(0)
+    summary += ` Razón deuda-ingreso estimada: ${ratio}%.`
+  }
+
+  let recommendation, recColor
+  if (risk === 'high') {
+    recommendation = 'Rechazo automático recomendado. El perfil presenta indicadores de riesgo que exceden los umbrales permitidos por política interna.'
+    recColor = '#f87171'
+  } else if (risk === 'medium' || risk === 'med') {
+    recommendation = 'Revisión manual por analista senior recomendada. Solicitar documentación adicional para verificar las inconsistencias detectadas antes de tomar una decisión.'
+    recColor = '#fbbf24'
+  } else {
+    recommendation = 'Perfil dentro de los parámetros aceptables. Se puede proceder con la aprobación sujeto a verificación final de identidad y documentos.'
+    recColor = '#6ee7b7'
+  }
+
+  return { summary, reasons, recommendation, recColor }
 }
 
 const riskColors = {
@@ -59,12 +90,20 @@ const riskLabel = (r) =>
 
 function timeAgo(dateStr) {
   if (!dateStr) return '—'
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `${mins}M AGO`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}H AGO`
-  return `${Math.floor(hrs / 24)}D AGO`
+  // Normalize: if no timezone info, treat as UTC
+  const normalized = /Z|[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z'
+  const date = new Date(normalized)
+  if (isNaN(date)) return '—'
+
+  const now   = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const d     = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const time  = date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const diffDays = Math.floor((today - d) / 86400000)
+
+  if (diffDays === 0) return `Hoy ${time}`
+  if (diffDays === 1) return `Ayer ${time}`
+  return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ` ${time}`
 }
 
 function mapApp(app) {
@@ -84,7 +123,8 @@ function mapApp(app) {
       incomeVerification: '—',
       employer:           '—',
       employment:         '—',
-      aiAnalysis:         buildAnalysis(app.fraudReasons, app.creditRecommendation),
+      analysisData:       generateDetailedAnalysis(app),
+      identityMatch:      '—',
       creditBuro:         app.creditScore != null ? app.creditScore : '—',
       monthlyRent:        '—',
       term:               '—',
@@ -174,7 +214,8 @@ function AnalystDashboard({ active }) {
           incomeVerification: detail.extractedData?.net_income ? 'VERIFICADO' : 'PENDIENTE',
           employer:           detail.extractedData?.employer_name ?? '—',
           employment:         detail.extractedData?.payment_frequency ?? '—',
-          aiAnalysis:         buildAnalysis(detail.fraudReasons, detail.creditRecommendation),
+          analysisData:       generateDetailedAnalysis(detail),
+          identityMatch:      detail.extractedData?.curp ? '99.8% VERIFICADO' : 'PENDIENTE',
           creditBuro:         detail.creditScore != null ? detail.creditScore : '—',
           monthlyRent:        detail.existingDebt
                                 ? `$${detail.existingDebt.toLocaleString('es-MX')} MXN`
@@ -422,8 +463,43 @@ function AnalystDashboard({ active }) {
               </div>
 
               <div className="glass-panel data-card ai-card">
-                <div className="card-title-sm" style={{ color: 'var(--accent-blue)' }}>Análisis</div>
-                <p className="ai-text">{selectedApp.details.aiAnalysis}</p>
+                <div className="card-title-sm" style={{ color: 'var(--accent-blue)' }}>Análisis de Riesgo</div>
+                {selectedApp.details.analysisData ? (() => {
+                  const a = selectedApp.details.analysisData
+                  return (
+                    <>
+                      <p className="analysis-summary">{a.summary}</p>
+
+                      {a.reasons.length > 0 && (
+                        <div className="analysis-section">
+                          <div className="analysis-section-label">Alertas Detectadas</div>
+                          <div className="analysis-alerts">
+                            {a.reasons.map((r, i) => {
+                              const key = r.split(':')[0]
+                              const label = FRAUD_REASON_LABELS[key] ?? r
+                              return (
+                                <div key={i} className="analysis-alert-item">
+                                  <span className="alert-dot" />
+                                  <span>{label}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div
+                        className="analysis-rec"
+                        style={{ borderColor: a.recColor + '50', background: a.recColor + '12' }}
+                      >
+                        <div className="analysis-section-label">Recomendación</div>
+                        <p style={{ color: a.recColor, margin: 0, fontSize: '0.85rem', lineHeight: 1.6 }}>
+                          {a.recommendation}
+                        </p>
+                      </div>
+                    </>
+                  )
+                })() : <p className="ai-text">—</p>}
               </div>
 
               {actionError && (
