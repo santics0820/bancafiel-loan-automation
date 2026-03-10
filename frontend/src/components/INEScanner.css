@@ -156,11 +156,11 @@
   border-radius: 0 4px 0 0;
 }
 
-/* Guía rostro — 62% ancho, elipse de retrato (0.73 ratio)
-   Mismos porcentajes que el JS de crop */
+/* Guía rostro — desktop: 38% width fits within landscape 44vh camera
+   Mobile overrides to 62% inside 3:4 portrait container */
 .face-guide {
   position: relative;
-  width: 62%;
+  width: 38%;
   aspect-ratio: 0.73;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
@@ -168,9 +168,10 @@
   pointer-events: none;
 }
 
-/* Face mode — portrait container so the selfie fills naturally */
+/* Face mode desktop — same landscape camera, no portrait ratio
+   (portrait + max-height + width:100% would ignore aspect-ratio) */
 .ine-camera.face-mode {
-  aspect-ratio: 3 / 4;
+  max-height: 44vh;
 }
 
 /* ── Barra de instrucciones + acciones ──────────────────── */
@@ -279,9 +280,19 @@
     border-right: none;
   }
 
-  /* Remove desktop max-height constraint on mobile */
+  /* Remove desktop max-height constraints on mobile */
   .ine-camera {
     max-height: none;
+  }
+
+  .ine-camera.face-mode {
+    aspect-ratio: 3 / 4;
+    max-height: none;
+  }
+
+  /* Larger oval on mobile — user can hold phone close */
+  .face-guide {
+    width: 62%;
   }
 
   .ine-steps {
