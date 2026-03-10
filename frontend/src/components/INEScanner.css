@@ -105,6 +105,7 @@
   line-height: 0;
   background: #000;
   overflow: hidden;
+  max-height: calc(100vh - 180px);
 }
 
 /* Overlay limpio — solo el recuadro guía, sin texto */
@@ -169,6 +170,8 @@
 /* Face mode — portrait container so the selfie fills naturally */
 .ine-camera.face-mode {
   aspect-ratio: 3 / 4;
+  max-width: 380px;
+  margin: 0 auto;
 }
 
 /* ── Barra de instrucciones + acciones ──────────────────── */
@@ -291,9 +294,11 @@
     aspect-ratio: 4 / 3;
   }
 
-  /* Face mode already portrait, keep it taller on mobile */
+  /* Face mode on mobile — full width portrait */
   .ine-camera.face-mode {
     aspect-ratio: 3 / 4;
+    max-width: 100%;
+    margin: 0;
   }
 
   .ine-actions {
