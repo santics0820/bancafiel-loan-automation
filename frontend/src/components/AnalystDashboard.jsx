@@ -13,7 +13,8 @@ const FRAUD_REASON_LABELS = {
   applicant_under_18:                     'Solicitante menor de 18 años',
   curp_dob_mismatch:                      'CURP no coincide con fecha de nacimiento',
   ine_expired:                            'INE vencida',
-  name_mismatch_ine_vs_proof_of_address:  'Nombre no coincide entre INE y comprobante de domicilio',
+  name_mismatch_ine_vs_proof_of_address:  'Domicilio no coincide entre INE y comprobante',
+  address_mismatch_ine_vs_proof_of_address: 'Domicilio no coincide entre INE y comprobante',
   proof_of_address_older_than_90_days:    'Comprobante de domicilio mayor a 90 días',
   recent_rejection_same_curp:             'CURP rechazado en los últimos 30 días',
 }
@@ -33,6 +34,24 @@ const riskColors = {
   medium: '#fbbf24',
   med:    '#fbbf24',
   low:    '#6ee7b7',
+}
+
+function buroCreditColor(score) {
+  if (score == null || score === '—') return 'var(--text-secondary)'
+  const n = parseInt(score)
+  if (n >= 750) return '#6ee7b7'  // Excelente — green
+  if (n >= 650) return '#60a5fa'  // Bueno — blue
+  if (n >= 550) return '#fbbf24'  // Regular — amber
+  return '#f87171'                // Malo — red
+}
+
+function buroCreditLabel(score) {
+  if (score == null || score === '—') return '—'
+  const n = parseInt(score)
+  if (n >= 750) return 'Excelente'
+  if (n >= 650) return 'Bueno'
+  if (n >= 550) return 'Regular'
+  return 'Malo'
 }
 
 const riskLabel = (r) =>
@@ -56,6 +75,7 @@ function mapApp(app) {
     requestedDate: app.requestedDate,
     risk:          app.fraudRiskLevel ?? app.risk ?? 'low',
     creditScore:   app.fraudScore != null ? `${(app.fraudScore / 10).toFixed(0)}%` : '—',
+    buroCreditScore: app.creditScore ?? null,
     details: {
       requestedAmount:    app.loanAmount ? `$${app.loanAmount.toLocaleString('es-MX')} MXN` : '—',
       fraudProbability:   app.fraudScore != null
@@ -65,7 +85,7 @@ function mapApp(app) {
       employer:           '—',
       employment:         '—',
       aiAnalysis:         buildAnalysis(app.fraudReasons, app.creditRecommendation),
-      identityMatch:      '—',
+      creditBuro:         app.creditScore != null ? app.creditScore : '—',
       monthlyRent:        '—',
       term:               '—',
     },
@@ -155,7 +175,7 @@ function AnalystDashboard({ active }) {
           employer:           detail.extractedData?.employer_name ?? '—',
           employment:         detail.extractedData?.payment_frequency ?? '—',
           aiAnalysis:         buildAnalysis(detail.fraudReasons, detail.creditRecommendation),
-          identityMatch:      detail.extractedData?.curp ? '99.8% VERIFICADO' : 'PENDIENTE',
+          creditBuro:         detail.creditScore != null ? detail.creditScore : '—',
           monthlyRent:        detail.existingDebt
                                 ? `$${detail.existingDebt.toLocaleString('es-MX')} MXN`
                                 : '—',
@@ -334,10 +354,21 @@ function AnalystDashboard({ active }) {
                   <h2 className="chrome-text detail-name">{selectedApp.name}</h2>
                   <p className="detail-id">#{selectedApp.id.slice(0, 8).toUpperCase()}</p>
                 </div>
-                <div className="credit-score-badge" style={{ borderColor: riskColors[selectedApp.risk] }}>
-                  <div className="score-label">SCORE</div>
-                  <div className="score-value" style={{ color: riskColors[selectedApp.risk] }}>
-                    {selectedApp.creditScore}
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <div className="credit-score-badge" style={{ borderColor: riskColors[selectedApp.risk] }}>
+                    <div className="score-label">SCORE</div>
+                    <div className="score-value" style={{ color: riskColors[selectedApp.risk] }}>
+                      {selectedApp.creditScore}
+                    </div>
+                  </div>
+                  <div className="credit-score-badge" style={{ borderColor: buroCreditColor(selectedApp.buroCreditScore) }}>
+                    <div className="score-label">BURÓ</div>
+                    <div className="score-value" style={{ color: buroCreditColor(selectedApp.buroCreditScore) }}>
+                      {selectedApp.buroCreditScore ?? '—'}
+                    </div>
+                    <div className="score-label" style={{ color: buroCreditColor(selectedApp.buroCreditScore), marginTop: '2px' }}>
+                      {buroCreditLabel(selectedApp.buroCreditScore)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -354,8 +385,8 @@ function AnalystDashboard({ active }) {
                     <div className="data-value">{selectedApp.details.term}</div>
                   </div>
                   <div className="data-cell">
-                    <div className="data-label">Identidad</div>
-                    <div className="data-value">{selectedApp.details.identityMatch}</div>
+                    <div className="data-label">Score Crediticio</div>
+                    <div className="data-value">{selectedApp.details.creditBuro}</div>
                   </div>
                   <div className="data-cell">
                     <div className="data-label">Ingresos</div>

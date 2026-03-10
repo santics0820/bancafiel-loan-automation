@@ -72,36 +72,56 @@ def handler(event, context):
             else:
                 # Get email/phone saved from the application form
                 app_record = execute_query_single(
-                    "SELECT applicant_email, applicant_phone FROM applications WHERE id = %s",
+                    "SELECT applicant_email, applicant_phone, verified_curp FROM applications WHERE id = %s",
                     (application_id,)
                 ) if application_id else None
                 applicant_email = app_record['applicant_email'] if app_record else None
                 applicant_phone = app_record['applicant_phone'] if app_record else None
 
-                # Parse date_of_birth — Claude returns DD/MM/YYYY, PostgreSQL needs YYYY-MM-DD
-                dob_raw = data.get('date_of_birth')
-                dob = None
-                if dob_raw:
-                    try:
-                        from datetime import datetime as dt
-                        dob = dt.strptime(dob_raw.strip(), '%d/%m/%Y').date().isoformat()
-                    except Exception:
-                        dob = None
+                # Fall back to user-confirmed CURP if Bedrock extraction was wrong
+                if app_record and app_record.get('verified_curp') and validate_curp(app_record['verified_curp']):
+                    curp = app_record['verified_curp'].strip().upper()
+                    # Re-check with the corrected CURP — may already exist from a previous run
+                    existing = execute_query_single(
+                        "SELECT id FROM customers WHERE curp = %s", (curp,)
+                    )
+                    if existing:
+                        customer_id = str(existing['id'])
+                        log_event(logger, 'customer_found_via_verified_curp', {'customer_id': customer_id, 'curp': curp})
 
-                # Create new customer from extracted data + form data
-                result = execute_query("""
-                    INSERT INTO customers (full_name, curp, email, phone, address, date_of_birth)
-                    VALUES (%s, %s, %s, %s, %s, %s) RETURNING id
-                """, (
-                    data.get('full_name', 'Unknown'),
-                    curp,
-                    applicant_email,
-                    applicant_phone,
-                    data.get('address'),
-                    dob
-                ))
-                customer_id = str(result[0]['id'])
-                log_event(logger, 'new_customer_created', {'customer_id': customer_id, 'curp': curp})
+                if not customer_id:
+                    # Parse date_of_birth — Claude returns DD/MM/YYYY, PostgreSQL needs YYYY-MM-DD
+                    dob_raw = data.get('date_of_birth')
+                    dob = None
+                    if dob_raw:
+                        try:
+                            from datetime import datetime as dt
+                            dob = dt.strptime(dob_raw.strip(), '%d/%m/%Y').date().isoformat()
+                        except Exception:
+                            dob = None
+
+                    # Create new customer — use ON CONFLICT to handle concurrent inserts safely
+                    result = execute_query("""
+                        INSERT INTO customers (full_name, curp, email, phone, address, date_of_birth)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (curp) DO NOTHING
+                        RETURNING id
+                    """, (
+                        data.get('full_name', 'Unknown'),
+                        curp,
+                        applicant_email,
+                        applicant_phone,
+                        data.get('address'),
+                        dob
+                    ))
+                    if result:
+                        customer_id = str(result[0]['id'])
+                        log_event(logger, 'new_customer_created', {'customer_id': customer_id, 'curp': curp})
+                    else:
+                        # Concurrent insert won the race — fetch the existing row
+                        existing = execute_query_single("SELECT id FROM customers WHERE curp = %s", (curp,))
+                        customer_id = str(existing['id']) if existing else None
+                        log_event(logger, 'customer_found_after_conflict', {'customer_id': customer_id, 'curp': curp})
 
         # 4. Link customer to application
         if customer_id and application_id:

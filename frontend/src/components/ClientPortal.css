@@ -355,6 +355,7 @@
 .tracking-step.done   .tracking-node { background: rgba(110,231,183,.18); color: #6ee7b7; border: 1.5px solid rgba(110,231,183,.4); }
 .tracking-step.active .tracking-node { background: rgba(96,165,250,.15);  color: #60a5fa; border: 1.5px solid rgba(96,165,250,.5); }
 .tracking-step.pending .tracking-node { background: rgba(255,255,255,.04); color: transparent; border: 1.5px solid rgba(255,255,255,.12); }
+.tracking-step.rejected .tracking-node { background: rgba(248,113,113,.18); color: #f87171; border: 1.5px solid rgba(248,113,113,.4); }
 
 .tracking-connector {
   grid-row: 2;
@@ -388,6 +389,35 @@
 .tracking-step.done    .tracking-badge { background: rgba(110,231,183,.12); color: #6ee7b7; }
 .tracking-step.active  .tracking-badge { background: rgba(96,165,250,.12);  color: #60a5fa; }
 .tracking-step.pending .tracking-badge { background: rgba(255,255,255,.05); color: var(--text-secondary); }
+.tracking-step.rejected .tracking-badge { background: rgba(248,113,113,.12); color: #f87171; }
+
+.rejection-banner {
+  background: rgba(248,113,113,.08);
+  border: 1px solid rgba(248,113,113,.25);
+  border-radius: 12px;
+  padding: 16px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rejection-banner p {
+  font-size: 14px;
+  color: #f87171;
+  margin: 0;
+}
+.rejection-banner .reapply-btn {
+  background: rgba(248,113,113,.15);
+  border: 1px solid rgba(248,113,113,.35);
+  color: #f87171;
+  border-radius: 8px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .2s;
+}
+.rejection-banner .reapply-btn:hover { background: rgba(248,113,113,.25); }
 
 .tracking-pulse {
   width: 8px; height: 8px;
