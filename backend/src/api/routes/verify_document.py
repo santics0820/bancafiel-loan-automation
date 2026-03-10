@@ -49,6 +49,9 @@ def handler(event, context):
 
         image_bytes = base64.b64decode(image_b64)
 
+        # Detect image format from magic bytes
+        img_format = 'png' if image_bytes[:8] == b'\x89PNG\r\n\x1a\n' else 'jpeg'
+
         # Call Bedrock synchronously
         response = bedrock_client.converse(
             modelId=BEDROCK_MODEL,
@@ -57,7 +60,7 @@ def handler(event, context):
                 'content': [
                     {
                         'image': {
-                            'format': 'jpeg',
+                            'format': img_format,
                             'source': {'bytes': image_bytes}
                         }
                     },

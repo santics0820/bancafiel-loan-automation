@@ -179,9 +179,24 @@ function ClientPortal({ active }) {
           const statusRes = await fetch(`${API_URL}/api/loans/status?folio=${data.folio}&email=${data.email}`)
           if (statusRes.ok) {
             const statusData = await statusRes.json()
-            setTrackingData(statusData)
+            const isRejected = statusData.status === 'REJECTED' || statusData.status === 'AUTO_REJECTED'
+            if (isRejected) {
+              const seenKey = `bf_rejection_seen_${data.folio}`
+              if (localStorage.getItem(seenKey)) {
+                // Already saw rejection screen — start fresh application
+                setStep('kyc-notice')
+              } else {
+                // First time seeing rejection — show the red X screen
+                setTrackingData(statusData)
+                setStep('tracking')
+              }
+            } else {
+              setTrackingData(statusData)
+              setStep('tracking')
+            }
+          } else {
+            setStep('tracking')
           }
-          setStep('tracking')
         } else {
           setStep('kyc-notice')
         }
@@ -264,6 +279,7 @@ function ClientPortal({ active }) {
           monthlyIncome:  incomeRangeToNumber(incomeRange),
           existingDebt:   0,
           dateOfBirth:    `${dobYear}-${dobMonth.padStart(2,'0')}-${dobDay.padStart(2,'0')}`,
+          verifiedCurp:   editCurp || undefined,
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -770,10 +786,15 @@ function ClientPortal({ active }) {
                 </div>
               </div>
 
-              <button className="liquid-btn kyc-cta" onClick={() => {
-                if (editName) setCapturedName(editName)
-                setStep('complete')
-              }}>
+              <button
+                className="liquid-btn kyc-cta"
+                disabled={!curpEditValid}
+                style={{ opacity: curpEditValid ? 1 : 0.35, cursor: curpEditValid ? 'pointer' : 'not-allowed' }}
+                onClick={() => {
+                  if (editName) setCapturedName(editName)
+                  setStep('complete')
+                }}
+              >
                 Confirmar y continuar →
               </button>
               <button className="auth-back-link" onClick={() => {
@@ -1028,8 +1049,15 @@ function ClientPortal({ active }) {
           { label: 'Análisis de documentos',    status: 'active'  },
           { label: 'Resolución final',          status: 'pending' },
         ]
-        const steps = trackingData?.steps || defaultSteps
-        const folio  = applicationId?.slice(0, 8).toUpperCase() || trackingData?.folio
+        const appStatus  = trackingData?.status
+        const isRejected = appStatus === 'REJECTED' || appStatus === 'AUTO_REJECTED'
+        const isApproved = appStatus === 'APPROVED'
+        const rawSteps   = trackingData?.steps || defaultSteps
+        // For rejected apps mark the last step as rejected so it shows a red X
+        const steps = isRejected
+          ? rawSteps.map((s, i) => i === rawSteps.length - 1 ? { ...s, status: 'rejected' } : s)
+          : rawSteps
+        const folio = applicationId?.slice(0, 8).toUpperCase() || trackingData?.folio
         return (
           <div className="kyc-card glass-panel tracking-view">
             <Logo />
@@ -1050,19 +1078,36 @@ function ClientPortal({ active }) {
                           strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     )}
+                    {s.status === 'rejected' && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M3 3 L11 11 M11 3 L3 11" stroke="currentColor" strokeWidth="1.8"
+                          strokeLinecap="round"/>
+                      </svg>
+                    )}
                     {s.status === 'active' && <div className="tracking-pulse" />}
                   </div>
                   {i < steps.length - 1 && <div className="tracking-connector" />}
                   <span className="tracking-label">{s.label}</span>
                   <span className="tracking-badge">{
-                    s.status === 'done'    ? 'Completado' :
-                    s.status === 'active'  ? 'En proceso' : 'Pendiente'
+                    s.status === 'done'     ? 'Completado' :
+                    s.status === 'rejected' ? 'Rechazado'  :
+                    s.status === 'active'   ? 'En proceso' : 'Pendiente'
                   }</span>
                 </div>
               ))}
             </div>
 
-            {steps.every(s => s.status === 'done') && (
+            {isRejected && (() => {
+              // Mark as seen so next login goes straight to new application
+              if (applicationId) localStorage.setItem(`bf_rejection_seen_${applicationId}`, '1')
+              return (
+                <div className="rejection-banner">
+                  <p>Tu solicitud fue rechazada.</p>
+                </div>
+              )
+            })()}
+
+            {isApproved && steps.every(s => s.status === 'done') && (
               <button className="liquid-btn kyc-cta card-reveal-trigger" onClick={() => setStep('card-reveal')}>
                 Comienza ahora
               </button>

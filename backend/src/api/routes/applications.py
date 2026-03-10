@@ -5,6 +5,7 @@ Handlers for all /api/loans endpoints
 import json
 import boto3
 import os
+import random
 from datetime import datetime, UTC
 
 try:
@@ -227,11 +228,14 @@ def submit_application(event, context):
             return error_response("applicationType must be 'LOAN' or 'CREDIT_CARD'", 400)
 
         # Create application record (customer linked later after OCR)
+        verified_curp = (body.get('verifiedCurp') or '').strip().upper() or None
+        credit_score  = random.randint(400, 850)
+
         result = execute_query("""
             INSERT INTO applications
             (application_type, loan_amount, monthly_income, existing_debt,
-             applicant_name, applicant_email, applicant_phone, status, requested_date)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'PENDING', %s)
+             applicant_name, applicant_email, applicant_phone, status, requested_date, verified_curp, credit_score)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'PENDING', %s, %s, %s)
             RETURNING id
         """, (
             application_type,
@@ -241,7 +245,9 @@ def submit_application(event, context):
             body.get('applicantName'),
             body.get('applicantEmail'),
             body.get('applicantPhone'),
-            datetime.now(UTC)
+            datetime.now(UTC),
+            verified_curp,
+            credit_score
         ))
 
         application_id = str(result[0]['id'])
