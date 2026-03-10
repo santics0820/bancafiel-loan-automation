@@ -197,7 +197,7 @@ def rule_based_fraud_score(app_data):
     # Rule 7: Address mismatch between INE and proof of address
     ine_address = get_extracted_field(app_data.get('id'), 'address', doc_type='INE')
     poa_address = get_extracted_field(app_data.get('id'), 'address', doc_type='PROOF_OF_ADDRESS')
-    if ine_address and poa_address and not names_similar(ine_address, poa_address, threshold=0.30):
+    if ine_address and poa_address and not addresses_overlap(ine_address, poa_address):
         score += 300
         reasons.append('address_mismatch_ine_vs_proof_of_address')
 
@@ -285,6 +285,28 @@ def names_similar(name1, name2, threshold=0.75):
         return False
     matches = sum(c1 == c2 for c1, c2 in zip(n1, n2))
     return (matches / max(len(n1), len(n2))) >= threshold
+
+
+def addresses_overlap(addr1, addr2, threshold=0.50):
+    """
+    True if ≥threshold of the shorter address's meaningful tokens
+    appear in the longer address. Handles the common case where one
+    address has more detail than the other (e.g. INE vs utility bill).
+    """
+    STOPWORDS = {'de', 'la', 'el', 'los', 'las', 'del', 'en', 'a', 'y', 'e', 'o', 'col', 'no'}
+
+    def tokenize(addr):
+        clean = ''.join(c if c.isalnum() else ' ' for c in addr.lower())
+        return {t for t in clean.split() if t not in STOPWORDS and len(t) > 1}
+
+    tokens1 = tokenize(addr1)
+    tokens2 = tokenize(addr2)
+    if not tokens1 or not tokens2:
+        return True  # Can't compare → don't penalise
+    shorter = tokens1 if len(tokens1) <= len(tokens2) else tokens2
+    longer  = tokens1 if len(tokens1) >  len(tokens2) else tokens2
+    overlap = len(shorter & longer) / len(shorter)
+    return overlap >= threshold
 
 
 def get_extracted_field(application_id, field_name, doc_type=None):
