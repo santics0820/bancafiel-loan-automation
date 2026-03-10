@@ -228,8 +228,8 @@ def submit_application(event, context):
             return error_response("applicationType must be 'LOAN' or 'CREDIT_CARD'", 400)
 
         # Create application record (customer linked later after OCR)
-        verified_curp = (body.get('verifiedCurp') or '').strip().upper() or None
-        credit_score  = random.randint(400, 850)
+        verified_curp  = (body.get('verifiedCurp') or '').strip().upper() or None
+        credit_score   = random.randint(400, 850)
         monthly_income = float(body.get('monthlyIncome') or 0)
         annual_income  = monthly_income * 12
 
@@ -269,13 +269,17 @@ def submit_application(event, context):
         incoming_bucket = os.environ.get('INCOMING_BUCKET', '')
         upload_urls = {}
 
-        doc_types = ['ine', 'proof_of_address', 'bank_statement']
-        for doc_type in doc_types:
+        doc_configs = {
+            'ine':              {'ext': 'jpg',  'content_type': 'image/jpeg'},
+            'proof_of_address': {'ext': 'pdf',  'content_type': 'application/pdf'},
+            'bank_statement':   {'ext': 'pdf',  'content_type': 'application/pdf'},
+        }
+        for doc_type, cfg in doc_configs.items():
             if incoming_bucket:
-                key = f"applications/{application_id}/{doc_type}"
+                key = f"applications/{application_id}/{doc_type}.{cfg['ext']}"
                 url = s3_client.generate_presigned_url(
                     'put_object',
-                    Params={'Bucket': incoming_bucket, 'Key': key},
+                    Params={'Bucket': incoming_bucket, 'Key': key, 'ContentType': cfg['content_type']},
                     ExpiresIn=3600
                 )
                 upload_urls[doc_type] = {'url': url, 'key': key}
