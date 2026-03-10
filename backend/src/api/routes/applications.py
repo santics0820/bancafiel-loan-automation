@@ -269,17 +269,13 @@ def submit_application(event, context):
         incoming_bucket = os.environ.get('INCOMING_BUCKET', '')
         upload_urls = {}
 
-        doc_configs = {
-            'ine':              {'ext': 'jpg',  'content_type': 'image/jpeg'},
-            'proof_of_address': {'ext': 'pdf',  'content_type': 'application/pdf'},
-            'bank_statement':   {'ext': 'pdf',  'content_type': 'application/pdf'},
-        }
-        for doc_type, cfg in doc_configs.items():
+        doc_types = ['ine', 'proof_of_address', 'bank_statement']
+        for doc_type in doc_types:
             if incoming_bucket:
-                key = f"applications/{application_id}/{doc_type}.{cfg['ext']}"
+                key = f"applications/{application_id}/{doc_type}"
                 url = s3_client.generate_presigned_url(
                     'put_object',
-                    Params={'Bucket': incoming_bucket, 'Key': key, 'ContentType': cfg['content_type']},
+                    Params={'Bucket': incoming_bucket, 'Key': key},
                     ExpiresIn=3600
                 )
                 upload_urls[doc_type] = {'url': url, 'key': key}
