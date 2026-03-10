@@ -1,8 +1,8 @@
 import './App.css'
-import ClientPortal from './components/ClientPortal'
+import AnalystDashboard from './components/AnalystDashboard'
 
 function App() {
-  return <ClientPortal active={true} />
+  return <AnalystDashboard active={true} />
 }
 
 export default App

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { API_URL } from '../config'
 
 const riskColors = {
@@ -22,9 +22,19 @@ const statusColors = {
 function FraudDetection({ active }) {
   const [data,       setData]       = useState(null)
   const [selected,   setSelected]   = useState(null)
-  const [filter,     setFilter]     = useState('ALL')
-  const [loading,    setLoading]    = useState(true)
-  const [error,      setError]      = useState(null)
+  const [filter,      setFilter]      = useState('ALL')
+  const [filterOpen,  setFilterOpen]  = useState(false)
+  const [loading,     setLoading]     = useState(true)
+  const [error,       setError]       = useState(null)
+  const filterRef = useRef(null)
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) setFilterOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   useEffect(() => {
     if (!active) return
@@ -89,17 +99,37 @@ function FraudDetection({ active }) {
         <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid var(--glass-border)' }}>
             <div style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.08em', color: 'var(--text-secondary)', marginBottom: '10px' }}>SOLICITUDES MARCADAS</div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {['ALL', 'HIGH', 'MEDIUM'].map(f => (
-                <span
-                  key={f}
-                  onClick={() => setFilter(f)}
-                  className="filter-chip"
-                  style={filter === f ? { color: riskColors[f] ?? 'var(--text-primary)', borderColor: riskColors[f] ?? 'var(--text-primary)', background: 'rgba(255,255,255,0.1)' } : {}}
-                >
-                  {f === 'ALL' ? 'Todas' : f === 'HIGH' ? 'Alto' : 'Medio'}
+            <div className="filter-dropdown" ref={filterRef}>
+              <button
+                className="filter-dropdown-trigger"
+                onClick={() => setFilterOpen(o => !o)}
+              >
+                <span style={{ color: filter === 'HIGH' ? '#f87171' : filter === 'MEDIUM' ? '#fbbf24' : 'var(--text-primary)' }}>
+                  {filter === 'ALL' ? 'Todas' : filter === 'HIGH' ? 'Alto Riesgo' : 'Riesgo Medio'}
                 </span>
-              ))}
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"
+                  style={{ transform: filterOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}>
+                  <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+              {filterOpen && (
+                <div className="filter-dropdown-menu glass-panel">
+                  {[
+                    { value: 'ALL',    label: 'Todas',        color: null },
+                    { value: 'HIGH',   label: 'Alto Riesgo',  color: '#f87171' },
+                    { value: 'MEDIUM', label: 'Riesgo Medio', color: '#fbbf24' },
+                  ].map(f => (
+                    <div
+                      key={f.value}
+                      className={`filter-dropdown-item ${filter === f.value ? 'active' : ''}`}
+                      onClick={() => { setFilter(f.value); setFilterOpen(false) }}
+                    >
+                      <span className="filter-dot" style={{ background: f.color ?? 'transparent', border: !f.color ? '1px solid var(--glass-border)' : 'none' }} />
+                      <span style={{ color: f.color ?? 'var(--text-primary)' }}>{f.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <div style={{ overflowY: 'auto', flex: 1 }}>
