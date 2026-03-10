@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist-analyst',
+    sourcemap: false,
     rollupOptions: {
       input: resolve(__dirname, 'analyst.html'),
     },
