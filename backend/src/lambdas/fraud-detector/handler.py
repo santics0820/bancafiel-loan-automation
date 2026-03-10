@@ -197,7 +197,7 @@ def rule_based_fraud_score(app_data):
     # Rule 7: Address mismatch between INE and proof of address
     ine_address = get_extracted_field(app_data.get('id'), 'address', doc_type='INE')
     poa_address = get_extracted_field(app_data.get('id'), 'address', doc_type='PROOF_OF_ADDRESS')
-    if ine_address and poa_address and not names_similar(ine_address, poa_address):
+    if ine_address and poa_address and not names_similar(ine_address, poa_address, threshold=0.30):
         score += 300
         reasons.append('address_mismatch_ine_vs_proof_of_address')
 
@@ -276,15 +276,15 @@ def is_document_too_old(date_str, max_days=90):
         return False
 
 
-def names_similar(name1, name2):
-    """True if names share ≥75% characters (ignoring whitespace, case)."""
+def names_similar(name1, name2, threshold=0.75):
+    """True if strings share ≥threshold characters (ignoring whitespace, case)."""
     n1 = ''.join(name1.lower().split())
     n2 = ''.join(name2.lower().split())
     shorter = min(len(n1), len(n2))
     if shorter == 0:
         return False
     matches = sum(c1 == c2 for c1, c2 in zip(n1, n2))
-    return (matches / max(len(n1), len(n2))) >= 0.75
+    return (matches / max(len(n1), len(n2))) >= threshold
 
 
 def get_extracted_field(application_id, field_name, doc_type=None):
