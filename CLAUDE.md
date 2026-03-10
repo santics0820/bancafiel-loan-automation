@@ -31,7 +31,7 @@ S3 upload (incoming bucket)
                     └─► async invoke
                           └─► [3] validateData  — validates fields, links customer by CURP
                                 └─► async invoke
-                                      └─► [4] detectFraud  — rule-based scoring (debt ratio, CURP, age, duplicates)
+                                      └─► [4] detectFraud  — rule-based scoring (9 rules: debt ratio, loan amount, duplicates, age, CURP/DOB, INE expiry, address match, proof of address age, recent rejection)
                                             └─► Step Functions (fraud_risk_level)
                                                   ├─ HIGH  → AutoReject
                                                   ├─ MEDIUM → [5] approvalNotifier (senior)

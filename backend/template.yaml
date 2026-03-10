@@ -562,6 +562,29 @@ Resources:
             Path: /api/loans
             Method: POST
 
+  VerifyDocumentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub bancafiel-verifyDocument-${Environment}
+      CodeUri: src/api/routes/
+      Handler: verify_document.handler
+      Description: POST /api/documents/verify - Synchronous INE OCR for pre-submission verification
+      Timeout: 30
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+                - bedrock:Converse
+              Resource: '*'
+      Events:
+        VerifyDocument:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BancaFielAPI
+            Path: /api/documents/verify
+            Method: POST
+
   AuthRegisterFunction:
     Type: AWS::Serverless::Function
     Properties:

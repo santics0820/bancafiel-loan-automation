@@ -18,9 +18,9 @@ A client submits a loan application through **www.bancafiel.com**. They upload t
 
 ### Phase 2 — Fraud Detection (Lambda 4)
 
-**Lambda 4 · `detectFraud`** — Runs a fully custom, rule-based fraud scoring algorithm. It checks: debt-to-income ratio, age from CURP, ID consistency, duplicate applications, and blacklists. Produces a risk level:
-- **HIGH** → automatic rejection, goes directly to `erpUpdater`
-- **MEDIUM / LOW** → routed to analyst for manual review via Step Functions
+**Lambda 4 · `detectFraud`** — Runs a fully custom, rule-based fraud scoring algorithm (9 rules, score 0–1000). Checks: debt-to-income ratio, loan amount, duplicate active applications, applicant age (hard block under 18), CURP/DOB cross-check, INE expiry, address match between INE and proof of address (75% similarity), proof of address older than 90 days (CNBV regulation), and recent rejection for the same CURP within 30 days. Produces a risk level:
+- **HIGH (≥700)** → automatic rejection, goes directly to `erpUpdater`
+- **MEDIUM (300–699) / LOW (<300)** → routed to analyst for manual review via Step Functions
 
 ### Phase 3 — Approval Workflow (Step Functions + Lambda 5)
 

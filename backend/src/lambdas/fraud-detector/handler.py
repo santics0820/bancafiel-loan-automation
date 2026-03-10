@@ -194,12 +194,12 @@ def rule_based_fraud_score(app_data):
         score += 200
         reasons.append('ine_expired')
 
-    # Rule 7: Name mismatch between INE and proof of address
-    ine_name = get_extracted_field(app_data.get('id'), 'full_name', doc_type='INE')
-    poa_name = get_extracted_field(app_data.get('id'), 'full_name', doc_type='PROOF_OF_ADDRESS')
-    if ine_name and poa_name and not names_similar(ine_name, poa_name):
+    # Rule 7: Address mismatch between INE and proof of address
+    ine_address = get_extracted_field(app_data.get('id'), 'address', doc_type='INE')
+    poa_address = get_extracted_field(app_data.get('id'), 'address', doc_type='PROOF_OF_ADDRESS')
+    if ine_address and poa_address and not names_similar(ine_address, poa_address):
         score += 300
-        reasons.append('name_mismatch_ine_vs_proof_of_address')
+        reasons.append('address_mismatch_ine_vs_proof_of_address')
 
     # Rule 8: Proof of address older than 90 days (CNBV regulation)
     poa_date_raw = get_extracted_field(app_data.get('id'), 'document_date', doc_type='PROOF_OF_ADDRESS')

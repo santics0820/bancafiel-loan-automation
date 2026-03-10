@@ -170,13 +170,22 @@ S3 upload (bancafiel-incoming-466901690437-dev)
 ### 9. Fraud Detection
 
 #### **Rule-based Lambda (detectFraud)** ✅ LIVE
-Fraud is scored in Lambda using business rules:
-- High debt-to-income ratio (>60%)
-- Loan amount > $100,000 MXN
-- CURP/DOB mismatch
-- INE expired
-- Duplicate applications (same CURP)
-- Applicant under 18
+Fraud is scored in Lambda using 9 business rules (score 0–1000, cap 1000):
+
+| # | Rule | Points | Trigger |
+|---|---|---|---|
+| 1 | Debt-to-income ratio > 60% | +300 | loan ÷ (income × 12) > 0.6 |
+| 1 | Debt-to-income ratio 40–60% | +150 | loan ÷ (income × 12) > 0.4 |
+| 2 | High loan amount | +200 | loan_amount > $100,000 MXN |
+| 3 | Duplicate active application | +400 | same customer has PENDING application |
+| 4 | Applicant under 18 | +900 | age < 18 (hard block — cannot sign contracts in Mexico) |
+| 5 | CURP / DOB mismatch | +400 | CURP positions 4–9 (YYMMDD) don't match declared DOB |
+| 6 | INE expired | +200 | expiry_date extracted from INE < today |
+| 7 | Address mismatch INE vs proof of address | +300 | < 75% character similarity between both address fields |
+| 8 | Proof of address older than 90 days | +150 | document_date > 90 days ago (CNBV regulation) |
+| 9 | Recent rejection same CURP | +400 | same CURP rejected within last 30 days |
+
+> **Note on Rule 7:** Compares the *address* on the INE against the *address* on the proof of address (not names). This allows applicants living with parents or family members — whose utility bills are in someone else's name — to pass without penalty.
 
 Risk level: `HIGH` / `MEDIUM` / `LOW` → drives Step Functions routing
 

@@ -525,6 +525,75 @@
 }
 
 /* ===== RFC step ===== */
+/* ===== Date of birth fields ===== */
+.dob-fields {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.dob-field-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.dob-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.dob-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  padding: 16px 12px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  font-family: var(--font-main);
+  color: var(--text-primary);
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  -moz-appearance: textfield;
+}
+
+.dob-input::-webkit-inner-spin-button,
+.dob-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.dob-input--year {
+  flex: 1.7;
+  letter-spacing: 0.06em;
+}
+
+.dob-input:focus {
+  border-color: rgba(96, 165, 250, 0.4);
+  background: rgba(96, 165, 250, 0.04);
+}
+
+.dob-input::placeholder {
+  color: rgba(255, 255, 255, 0.12);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.dob-sep {
+  font-size: 1.4rem;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.2);
+  padding-bottom: 14px;
+}
+
 .rfc-field {
   display: flex; flex-direction: column; gap: 8px; width: 100%;
 }
@@ -696,6 +765,58 @@
   font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 0.04em;
+}
+
+/* ===== Verify INE step ===== */
+.verify-tips {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.verify-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.verify-warning-box {
+  background: rgba(251, 191, 36, 0.07);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.curp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 0.65rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.curp-valid {
+  background: rgba(110, 231, 183, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(110, 231, 183, 0.3);
+}
+
+.curp-warn {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(251, 191, 36, 0.3);
 }
 
 /* ===== "Meet your new card" button ===== */

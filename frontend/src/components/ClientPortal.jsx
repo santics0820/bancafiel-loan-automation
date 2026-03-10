@@ -134,7 +134,15 @@ function ClientPortal({ active }) {
   const [authStep,      setAuthStep]      = useState('email') // 'email' | 'password'
   const [trackingData,  setTrackingData]  = useState(null)
   const [trackingLoading, setTrackingLoading] = useState(false)
-  const fileInputRef = useRef(null)
+  const [dobDay,        setDobDay]        = useState('')
+  const [dobMonth,      setDobMonth]      = useState('')
+  const [dobYear,       setDobYear]       = useState('')
+  const [verifiedData,  setVerifiedData]  = useState(null)
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [verifyError,   setVerifyError]   = useState(null)
+  const fileInputRef    = useRef(null)
+  const dobMonthRef     = useRef(null)
+  const dobYearRef      = useRef(null)
 
   const authValid = email.includes('@') && email.includes('.')
   const canSignIn = authValid && authPassword.length >= 6
@@ -192,14 +200,43 @@ function ClientPortal({ active }) {
     setStep('tracking')
   }
 
-  // KYC capture — store name + INE image blob
-  const handleCapture = (image, mode, name) => {
+  // KYC capture — store name + INE image blob, then verify synchronously
+  const handleCapture = async (image, mode, name) => {
     if (mode === 'card-combined') {
-      // Combined front+back INE JPEG blob — store for upload
       if (image) setCapturedINEFile(image)
     } else if (mode === 'face') {
       if (name) setCapturedName(name)
-      setStep('complete')
+
+      // Verify INE with backend before advancing
+      if (capturedINEFile) {
+        setVerifyError(null)
+        setVerifyLoading(true)
+        setStep('verify-ine')
+        try {
+          const b64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result.split(',')[1])
+            reader.onerror = reject
+            reader.readAsDataURL(capturedINEFile)
+          })
+          const res = await fetch(`${API_URL}/api/documents/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: b64 }),
+          })
+          const data = await res.json()
+          if (res.ok && data.success) {
+            setVerifiedData(data)
+          } else {
+            setVerifyError(data.error || 'No se pudo verificar tu INE.')
+          }
+        } catch {
+          setVerifyError('Error de conexión. Intenta de nuevo.')
+        }
+        setVerifyLoading(false)
+      } else {
+        setStep('complete')
+      }
     }
   }
 
@@ -218,6 +255,7 @@ function ClientPortal({ active }) {
           applicationType: 'CREDIT_CARD',
           monthlyIncome:  incomeRangeToNumber(incomeRange),
           existingDebt:   0,
+          dateOfBirth:    `${dobYear}-${dobMonth.padStart(2,'0')}-${dobDay.padStart(2,'0')}`,
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -532,7 +570,7 @@ function ClientPortal({ active }) {
             </div>
           </div>
 
-          <button className="liquid-btn kyc-cta" onClick={() => setStep('kyc')}>
+          <button className="liquid-btn kyc-cta" onClick={() => setStep('dob')}>
             Comenzar verificación →
           </button>
 
@@ -542,12 +580,197 @@ function ClientPortal({ active }) {
         </div>
       )}
 
+      {/* ── FECHA DE NACIMIENTO ── */}
+      {step === 'dob' && (() => {
+        const dayOk   = dobDay.length >= 1   && parseInt(dobDay)   >= 1  && parseInt(dobDay)   <= 31
+        const monthOk = dobMonth.length >= 1 && parseInt(dobMonth) >= 1  && parseInt(dobMonth) <= 12
+        const yearOk  = dobYear.length === 4 && parseInt(dobYear)  >= 1900 && parseInt(dobYear) <= new Date().getFullYear() - 17
+        const dobValid = dayOk && monthOk && yearOk
+        return (
+          <div className="kyc-card glass-panel">
+            <div className="kyc-intro">
+              <h1>¿Cuál es tu fecha de nacimiento?</h1>
+              <p>Necesitamos verificar que seas mayor de 18 años.</p>
+            </div>
+
+            <div className="dob-fields">
+              <div className="dob-field-wrap">
+                <label className="dob-label">Día</label>
+                <input
+                  className="dob-input"
+                  type="number"
+                  placeholder="DD"
+                  min={1} max={31}
+                  maxLength={2}
+                  value={dobDay}
+                  autoFocus
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,2)
+                    setDobDay(v)
+                    if (v.length === 2) dobMonthRef.current?.focus()
+                  }}
+                />
+              </div>
+              <span className="dob-sep">/</span>
+              <div className="dob-field-wrap">
+                <label className="dob-label">Mes</label>
+                <input
+                  className="dob-input"
+                  type="number"
+                  placeholder="MM"
+                  min={1} max={12}
+                  maxLength={2}
+                  ref={dobMonthRef}
+                  value={dobMonth}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,2)
+                    setDobMonth(v)
+                    if (v.length === 2) dobYearRef.current?.focus()
+                  }}
+                />
+              </div>
+              <span className="dob-sep">/</span>
+              <div className="dob-field-wrap">
+                <label className="dob-label">Año</label>
+                <input
+                  className="dob-input dob-input--year"
+                  type="number"
+                  placeholder="AAAA"
+                  min={1900}
+                  maxLength={4}
+                  ref={dobYearRef}
+                  value={dobYear}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,4)
+                    setDobYear(v)
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!dobValid}
+              style={{ opacity: dobValid ? 1 : 0.35, cursor: dobValid ? 'pointer' : 'not-allowed' }}
+              onClick={() => setStep('kyc')}
+            >
+              Continuar →
+            </button>
+
+            <button className="auth-back-link" onClick={() => setStep('kyc-notice')}>
+              ← Volver
+            </button>
+          </div>
+        )
+      })()}
+
       {/* ── KYC CAMERA ── */}
       {step === 'kyc' && (
         <div className="portal-card glass-panel scanner-mode">
           <div className="scanner-view">
             <INEScanner onCapture={handleCapture} onBack={() => setStep('auth')} />
           </div>
+        </div>
+      )}
+
+      {/* ── VERIFY INE ── */}
+      {step === 'verify-ine' && (
+        <div className="kyc-card glass-panel">
+          {verifyLoading ? (
+            /* Loading */
+            <div className="kyc-complete-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              <div className="submit-spinner" />
+              <p className="complete-label" style={{ fontSize: '1rem' }}>Leyendo tu INE…</p>
+            </div>
+          ) : verifyError ? (
+            /* Error */
+            <>
+              <div className="kyc-intro" style={{ gap: '8px' }}>
+                <h1 style={{ fontSize: '1.4rem' }}>No pudimos leer tu INE</h1>
+                <p>{verifyError}</p>
+              </div>
+              <div className="verify-tips">
+                <div className="verify-tip"><span>💡</span><span>Asegúrate de que la foto esté enfocada y bien iluminada</span></div>
+                <div className="verify-tip"><span>💡</span><span>Evita reflejos y sombras sobre el documento</span></div>
+                <div className="verify-tip"><span>💡</span><span>Incluye el reverso de tu INE — ahí está el CURP</span></div>
+              </div>
+              <button className="liquid-btn kyc-cta" onClick={() => {
+                setCapturedINEFile(null)
+                setVerifyError(null)
+                setStep('kyc')
+              }}>
+                Volver a escanear →
+              </button>
+            </>
+          ) : verifiedData ? (
+            /* Success — show extracted fields */
+            <>
+              <div className="kyc-intro" style={{ gap: '4px' }}>
+                <h1 style={{ fontSize: '1.4rem' }}>Confirma tus datos</h1>
+                <p>Verifica que la información extraída de tu INE sea correcta.</p>
+              </div>
+
+              <div className="credit-details">
+                {verifiedData.fields?.full_name && (
+                  <div className="credit-detail-row">
+                    <span>Nombre completo</span>
+                    <span className="detail-val" style={{ maxWidth: '60%', textAlign: 'right', fontSize: '0.78rem', lineHeight: 1.3 }}>
+                      {verifiedData.fields.full_name}
+                    </span>
+                  </div>
+                )}
+                <div className="credit-detail-row">
+                  <span>CURP</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="detail-val" style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>
+                      {verifiedData.fields?.curp || '—'}
+                    </span>
+                    <span className={`curp-badge ${verifiedData.curp_valid ? 'curp-valid' : 'curp-warn'}`}>
+                      {verifiedData.curp_valid ? '✓' : '!'}
+                    </span>
+                  </span>
+                </div>
+                {verifiedData.fields?.date_of_birth && (
+                  <div className="credit-detail-row">
+                    <span>Fecha de nacimiento</span>
+                    <span className="detail-val">{verifiedData.fields.date_of_birth}</span>
+                  </div>
+                )}
+                {verifiedData.fields?.address && (
+                  <div className="credit-detail-row">
+                    <span>Domicilio</span>
+                    <span className="detail-val" style={{ maxWidth: '58%', textAlign: 'right', fontSize: '0.75rem', lineHeight: 1.3 }}>
+                      {verifiedData.fields.address}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {verifiedData.warnings?.length > 0 && (
+                <div className="verify-warning-box">
+                  {verifiedData.warnings.map((w, i) => (
+                    <div key={i} className="verify-tip">
+                      <span>⚠️</span><span>{w}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button className="liquid-btn kyc-cta" onClick={() => {
+                if (verifiedData.fields?.full_name) setCapturedName(verifiedData.fields.full_name)
+                setStep('complete')
+              }}>
+                Confirmar y continuar →
+              </button>
+              <button className="auth-back-link" onClick={() => {
+                setCapturedINEFile(null)
+                setVerifiedData(null)
+                setStep('kyc')
+              }}>
+                ← Volver a escanear
+              </button>
+            </>
+          ) : null}
         </div>
       )}
 
