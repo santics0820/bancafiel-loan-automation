@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:analyst": "vite --config vite.analyst.config.js",
     "build": "vite build",
+    "build:analyst": "vite build --config vite.analyst.config.js",
+    "build:all": "npm run build && npm run build:analyst",
     "preview": "vite preview"
   },
   "dependencies": {
+    "gsap": "^3.14.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-webcam": "^7.2.0"

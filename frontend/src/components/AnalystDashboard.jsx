@@ -1,264 +1,532 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import './AnalystDashboard.css'
 import Logo from './Logo'
 import Overview from './Overview'
 import FraudDetection from './FraudDetection'
+import { API_URL } from '../config'
 
-const applications = [
-  {
-    id: 'LN-2024-8821',
-    name: 'Elena Rodriguez',
-    time: '10M AGO',
-    risk: 'med',
-    creditScore: 685,
-    applicationId: '8821-XJ-92',
-    details: {
-      identityMatch: '99.8% VERIFIED',
-      incomeVerification: 'INCONSISTENT',
-      fraudProbability: '1.2% (LOW)',
-      aiAnalysis: 'The declared monthly income ($45,000) varies by 15% from the average deposits found in the uploaded bank statements ($38,200). Manual review recommended.',
-      employment: 'FULL-TIME',
-      employer: 'TECH SOLUTIONS INC.',
-      tenure: '3 YRS, 2 MOS',
-      monthlyRent: '$12,500 MXN',
-      requestedAmount: '$250,000 MXN',
-      term: '48 MONTHS'
-    }
-  },
-  {
-    id: 'LN-2024-8819',
-    name: 'Marco Silva',
-    time: '24M AGO',
-    risk: 'low',
-    creditScore: 750,
-    applicationId: '8819-AB-45',
-    details: {
-      identityMatch: '99.9% VERIFIED',
-      incomeVerification: 'VERIFIED',
-      fraudProbability: '0.5% (LOW)',
-      aiAnalysis: 'All documentation verified successfully. Income matches bank statements. No red flags detected.',
-      employment: 'FULL-TIME',
-      employer: 'CONSULTING FIRM SA',
-      tenure: '5 YRS, 8 MOS',
-      monthlyRent: '$15,000 MXN',
-      requestedAmount: '$180,000 MXN',
-      term: '36 MONTHS'
-    }
-  },
-  {
-    id: 'LN-2024-8815',
-    name: 'Sofia Martinez',
-    time: '1H AGO',
-    risk: 'high',
-    creditScore: 580,
-    applicationId: '8815-CD-78',
-    details: {
-      identityMatch: '95.2% VERIFIED',
-      incomeVerification: 'INCONSISTENT',
-      fraudProbability: '8.7% (HIGH)',
-      aiAnalysis: 'Multiple inconsistencies detected. Income verification failed. Address mismatch between documents. Recommend thorough manual review.',
-      employment: 'SELF-EMPLOYED',
-      employer: 'INDEPENDENT CONTRACTOR',
-      tenure: '1 YR, 3 MOS',
-      monthlyRent: '$8,000 MXN',
-      requestedAmount: '$300,000 MXN',
-      term: '60 MONTHS'
-    }
-  },
-  {
-    id: 'LN-2024-8802',
-    name: 'David Chen',
-    time: '2H AGO',
-    risk: 'low',
-    creditScore: 720,
-    applicationId: '8802-EF-12',
-    details: {
-      identityMatch: '99.5% VERIFIED',
-      incomeVerification: 'VERIFIED',
-      fraudProbability: '0.8% (LOW)',
-      aiAnalysis: 'Strong application with consistent documentation. Income verified against multiple sources.',
-      employment: 'FULL-TIME',
-      employer: 'FINANCIAL SERVICES CO.',
-      tenure: '4 YRS, 1 MO',
-      monthlyRent: '$14,000 MXN',
-      requestedAmount: '$200,000 MXN',
-      term: '42 MONTHS'
-    }
+const FRAUD_REASON_LABELS = {
+  high_debt_to_income_ratio:              'Razón deuda-ingreso muy alta (>60%)',
+  elevated_debt_to_income_ratio:          'Razón deuda-ingreso elevada (>40%)',
+  high_loan_amount:                       'Monto solicitado superior a $100,000 MXN',
+  'duplicate_applications_found':         'Solicitudes duplicadas pendientes',
+  applicant_under_18:                     'Solicitante menor de 18 años',
+  curp_dob_mismatch:                      'CURP no coincide con fecha de nacimiento',
+  ine_expired:                            'INE vencida',
+  name_mismatch_ine_vs_proof_of_address:    'Nombre no coincide entre INE y comprobante de domicilio',
+  address_mismatch_ine_vs_proof_of_address: 'Domicilio no coincide entre INE y comprobante de domicilio',
+  proof_of_address_older_than_90_days:      'Comprobante de domicilio mayor a 90 días',
+  recent_rejection_same_curp:             'CURP rechazado en los últimos 30 días',
+}
+
+function generateDetailedAnalysis(data) {
+  const score    = data.fraudScore
+  const risk     = data.fraudRiskLevel ?? data.risk ?? 'low'
+  const reasons  = data.fraudReasons ?? []
+  const income   = data.extractedData?.net_income
+  const debt     = data.existingDebt
+
+  const riskText = risk === 'high' ? 'ALTO' : (risk === 'medium' || risk === 'med') ? 'MEDIO' : 'BAJO'
+
+  let summary = score != null
+    ? `Puntuación de fraude del ${(score / 10).toFixed(1)}% — nivel ${riskText}. `
+    : `Nivel de riesgo ${riskText}. `
+
+  if (reasons.length === 0) {
+    summary += 'No se detectaron alertas. La solicitud cumple con los parámetros estándar de evaluación.'
+  } else if (reasons.length === 1) {
+    summary += 'Se detectó 1 alerta que requiere revisión antes de proceder.'
+  } else {
+    summary += `Se detectaron ${reasons.length} alertas que requieren revisión antes de proceder.`
   }
+
+  if (income && debt != null) {
+    const ratio = ((debt / income) * 100).toFixed(0)
+    summary += ` Razón deuda-ingreso estimada: ${ratio}%.`
+  }
+
+  let recommendation, recColor
+  if (risk === 'high') {
+    recommendation = 'Rechazo automático recomendado. El perfil presenta indicadores de riesgo que exceden los umbrales permitidos por política interna.'
+    recColor = '#f87171'
+  } else if (risk === 'medium' || risk === 'med') {
+    recommendation = 'Revisión manual por analista senior recomendada. Solicitar documentación adicional para verificar las inconsistencias detectadas antes de tomar una decisión.'
+    recColor = '#fbbf24'
+  } else {
+    recommendation = 'Perfil dentro de los parámetros aceptables. Se puede proceder con la aprobación sujeto a verificación final de identidad y documentos.'
+    recColor = '#6ee7b7'
+  }
+
+  return { summary, reasons, recommendation, recColor }
+}
+
+const riskColors = {
+  high:   '#f87171',
+  medium: '#fbbf24',
+  med:    '#fbbf24',
+  low:    '#6ee7b7',
+}
+
+function buroCreditColor(score) {
+  if (score == null || score === '—') return 'var(--text-secondary)'
+  const n = parseInt(score)
+  if (n >= 750) return '#6ee7b7'  // Excelente — green
+  if (n >= 650) return '#60a5fa'  // Bueno — blue
+  if (n >= 550) return '#fbbf24'  // Regular — amber
+  return '#f87171'                // Malo — red
+}
+
+function buroCreditLabel(score) {
+  if (score == null || score === '—') return '—'
+  const n = parseInt(score)
+  if (n >= 750) return 'Excelente'
+  if (n >= 650) return 'Bueno'
+  if (n >= 550) return 'Regular'
+  return 'Malo'
+}
+
+const riskLabel = (r) =>
+  r === 'high' ? 'Alto' : r === 'medium' || r === 'med' ? 'Medio' : 'Bajo'
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '—'
+  // Normalize: if no timezone info, treat as UTC
+  const normalized = /Z|[+-]\d{2}:\d{2}$/.test(dateStr) ? dateStr : dateStr + 'Z'
+  const date = new Date(normalized)
+  if (isNaN(date)) return '—'
+
+  const now   = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const d     = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const time  = date.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const diffDays = Math.floor((today - d) / 86400000)
+
+  if (diffDays === 0) return `Hoy ${time}`
+  if (diffDays === 1) return `Ayer ${time}`
+  return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ` ${time}`
+}
+
+function mapApp(app) {
+  return {
+    id:            app.id,
+    name:          app.applicantName ?? app.name ?? '—',
+    time:          timeAgo(app.requestedDate),
+    requestedDate: app.requestedDate,
+    risk:          app.fraudRiskLevel ?? app.risk ?? 'low',
+    creditScore:   app.fraudScore != null ? `${(app.fraudScore / 10).toFixed(0)}%` : '—',
+    buroCreditScore: app.creditScore ?? null,
+    details: {
+      requestedAmount:    app.loanAmount ? `$${app.loanAmount.toLocaleString('es-MX')} MXN` : '—',
+      fraudProbability:   app.fraudScore != null
+                            ? `${(app.fraudScore / 10).toFixed(1)}% (${riskLabel(app.fraudRiskLevel ?? 'low')})`
+                            : '—',
+      incomeVerification: '—',
+      employer:           '—',
+      employment:         '—',
+      analysisData:       generateDetailedAnalysis(app),
+      identityMatch:      '—',
+      creditBuro:         app.creditScore != null ? app.creditScore : '—',
+      monthlyRent:        '—',
+      term:               '—',
+    },
+  }
+}
+
+const STATUS_FILTERS = [
+  { label: 'Todas',      value: 'all' },
+  { label: 'Pendientes', value: 'processing' },
+  { label: 'Aprobadas',  value: 'approved' },
+  { label: 'Rechazadas', value: 'rejected' },
 ]
 
+const statusColors = {
+  processing: '#fbbf24',
+  approved:   '#6ee7b7',
+  rejected:   '#f87171',
+}
+
 function AnalystDashboard({ active }) {
-  const [selectedApp, setSelectedApp] = useState(applications[0])
-  const [currentView, setCurrentView] = useState('applications')
+  const [allApplications, setAllApplications] = useState([])
+  const [selectedApp,     setSelectedApp]     = useState(null)
+  const [loading,         setLoading]         = useState(true)
+  const [currentView,     setCurrentView]     = useState('applications')
+  const [actionError,     setActionError]     = useState(null)
+  const [actionLoading,   setActionLoading]   = useState(false)
+  const [statusFilter,    setStatusFilter]    = useState('all')
+  const [filterOpen,      setFilterOpen]      = useState(false)
+  const filterDropdownRef = useRef(null)
+
+  const applications = statusFilter === 'all'
+    ? allApplications
+    : allApplications.filter(a => a.status === statusFilter)
+
+  const fetchAll = () => {
+    setLoading(true)
+    Promise.all([
+      fetch(`${API_URL}/api/loans?status=processing`).then(r => r.json()),
+      fetch(`${API_URL}/api/loans?status=approved`).then(r => r.json()),
+      fetch(`${API_URL}/api/loans?status=rejected`).then(r => r.json()),
+    ]).then(([proc, appr, rej]) => {
+      const mapped = [
+        ...(proc.applications ?? []).map(a => ({ ...mapApp(a), status: 'processing' })),
+        ...(appr.applications ?? []).map(a => ({ ...mapApp(a), status: 'approved' })),
+        ...(rej.applications  ?? []).map(a => ({ ...mapApp(a), status: 'rejected'  })),
+      ].sort((a, b) => new Date(b.requestedDate) - new Date(a.requestedDate))
+      setAllApplications(mapped)
+      setSelectedApp(mapped[0] ?? null)
+      setLoading(false)
+    }).catch(err => {
+      console.error(err)
+      setLoading(false)
+    })
+  }
+
+  useEffect(() => {
+    if (!active) return
+    fetchAll()
+  }, [active])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(e.target)) {
+        setFilterOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleSelectApp = async (app) => {
+    setSelectedApp(app)
+    try {
+      const res = await fetch(`${API_URL}/api/loans/${app.id}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const detail = await res.json()
+      setSelectedApp({
+        ...app,
+        details: {
+          requestedAmount:    detail.loanAmount
+                                ? `$${detail.loanAmount.toLocaleString('es-MX')} MXN`
+                                : '—',
+          fraudProbability:   detail.fraudScore != null
+                                ? `${(detail.fraudScore / 10).toFixed(1)}% (${riskLabel(detail.fraudRiskLevel ?? 'low')})`
+                                : '—',
+          incomeVerification: detail.extractedData?.net_income ? 'VERIFICADO' : 'PENDIENTE',
+          employer:           detail.extractedData?.employer_name ?? '—',
+          employment:         detail.extractedData?.payment_frequency ?? '—',
+          analysisData:       generateDetailedAnalysis(detail),
+          identityMatch:      detail.extractedData?.curp ? '99.8% VERIFICADO' : 'PENDIENTE',
+          creditBuro:         detail.creditScore != null ? detail.creditScore : '—',
+          monthlyRent:        detail.existingDebt
+                                ? `$${detail.existingDebt.toLocaleString('es-MX')} MXN`
+                                : '—',
+          term:               '—',
+        },
+        history: detail.history ?? [],
+      })
+    } catch (err) {
+      console.error('Detail fetch failed:', err)
+    }
+  }
+
+  const removeApp = (id) => {
+    fetchAll()
+    setSelectedApp(null)
+  }
+
+  const handleApprove = async () => {
+    if (!selectedApp || actionLoading) return
+    setActionError(null)
+    setActionLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/api/loans/${selectedApp.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approvedBy: 'analyst', notes: 'Aprobado desde dashboard' }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setSelectedApp(prev => ({ ...prev, status: 'approved' }))
+      setAllApplications(prev => prev.map(a => a.id === selectedApp.id ? { ...a, status: 'approved' } : a))
+    } catch (err) {
+      console.error(err)
+      setActionError('Error al aprobar. Intenta de nuevo.')
+    }
+    setActionLoading(false)
+  }
+
+  const handleReject = async () => {
+    if (!selectedApp || actionLoading) return
+    setActionError(null)
+    setActionLoading(true)
+    try {
+      const res = await fetch(`${API_URL}/api/loans/${selectedApp.id}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rejectedBy: 'analyst', reason: 'Rechazado desde dashboard' }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setSelectedApp(prev => ({ ...prev, status: 'rejected' }))
+      setAllApplications(prev => prev.map(a => a.id === selectedApp.id ? { ...a, status: 'rejected' } : a))
+    } catch (err) {
+      console.error(err)
+      setActionError('Error al rechazar. Intenta de nuevo.')
+    }
+    setActionLoading(false)
+  }
+
+  if (!active) return null
 
   return (
-    <div className={`app-view dashboard-view ${active ? 'active' : ''}`}>
+    <div className="dashboard-view">
       <nav className="dash-nav">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '60px', height: '100%' }}>
-          <Logo style={{ color: '#FFFFFF' }} />
-          <div className="nav-links">
-            <a
-              href="#"
-              className={`nav-link ${currentView === 'overview' ? 'active' : ''}`}
-              onClick={(e) => { e.preventDefault(); setCurrentView('overview'); }}
-            >
-              Overview
-            </a>
-            <a
-              href="#"
-              className={`nav-link ${currentView === 'applications' ? 'active' : ''}`}
-              onClick={(e) => { e.preventDefault(); setCurrentView('applications'); }}
-            >
-              Applications (12)
-            </a>
-            <a
-              href="#"
-              className={`nav-link ${currentView === 'fraud' ? 'active' : ''}`}
-              onClick={(e) => { e.preventDefault(); setCurrentView('fraud'); }}
-            >
-              Fraud Detection
-            </a>
-            <a href="#" className="nav-link">Settings</a>
-          </div>
+        <Logo />
+        <div className="nav-pill glass-panel">
+          <button
+            className={`nav-btn ${currentView === 'overview' ? 'active' : ''}`}
+            onClick={() => setCurrentView('overview')}
+          >
+            OVERVIEW
+          </button>
+          <button
+            className={`nav-btn ${currentView === 'applications' ? 'active' : ''}`}
+            onClick={() => setCurrentView('applications')}
+          >
+            SOLICITUDES ({applications.length})
+          </button>
+          <button
+            className={`nav-btn ${currentView === 'fraud' ? 'active' : ''}`}
+            onClick={() => setCurrentView('fraud')}
+          >
+            FRAUDE
+          </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '40px', height: '40px', background: '#FFFFFF', borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: 'var(--brand-blue)', fontSize: '0.9rem' }}>
-            JD
-          </div>
+        <div className="user-pill">
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Analista Senior</span>
+          <div className="avatar"></div>
         </div>
       </nav>
 
       <Overview active={currentView === 'overview'} />
       <FraudDetection active={currentView === 'fraud'} />
 
-      <div className={`workspace grid-pattern ${currentView === 'applications' ? '' : 'hidden'}`}>
-        <div className="list-panel">
-          <div className="list-header">
-            <input type="text" className="search-bar" placeholder="SEARCH APPLICATION ID..." />
-            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', alignItems: 'center' }}>
-              <span className="text-caps" style={{ color: 'rgba(255,255,255,0.6)' }}>Filter:</span>
-              <span className="text-caps" style={{ color: '#FFFFFF', background: 'rgba(255,255,255,0.2)', padding: '4px 8px', cursor: 'pointer' }}>
-                Pending
-              </span>
-            </div>
-          </div>
-          <div className="app-list">
-            {applications.map((app) => (
-              <div
-                key={app.id}
-                className={`app-item ${selectedApp.id === app.id ? 'selected' : ''}`}
-                onClick={() => setSelectedApp(app)}
-              >
-                <div className="app-meta">
-                  <span>#{app.id}</span>
-                  <span>{app.time}</span>
-                </div>
-                <div className="app-name">{app.name}</div>
-                <span className={`risk-pill risk-${app.risk}`}>Risk: {app.risk === 'med' ? 'Medium' : app.risk === 'low' ? 'Low' : 'High'}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="detail-panel">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '40px', position: 'relative', zIndex: 1 }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
-                <h2>{selectedApp.name}</h2>
-                <span className={`risk-pill risk-${selectedApp.risk}`} style={{ fontSize: '0.9rem', padding: '6px 16px', background: 'rgba(255,255,255,0.1)' }}>
-                  {selectedApp.risk === 'med' ? 'Medium' : selectedApp.risk === 'low' ? 'Low' : 'High'} Risk Level
-                </span>
-              </div>
-              <p style={{ color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-mono)', fontSize: '1.1rem' }}>
-                APPLICATION ID: {selectedApp.applicationId}
-              </p>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div className="text-caps" style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '4px' }}>Credit Score</div>
-              <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', lineHeight: 1 }}>{selectedApp.creditScore}</div>
-            </div>
-          </div>
-
-          <div className="detail-card">
-            <div className="card-header">
-              <span className="text-caps" style={{ color: '#FFFFFF', fontSize: '0.9rem' }}>AI Validation Engine</span>
-              <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-mono)' }}>PROCESSED IN 1.2S</span>
-            </div>
-            <div className="data-grid">
-              <div className="data-cell">
-                <div className="data-label">Identity Match</div>
-                <div className="data-value" style={{ color: '#4ADE80' }}>{selectedApp.details.identityMatch}</div>
-              </div>
-              <div className="data-cell">
-                <div className="data-label">Income Verification</div>
-                <div className="data-value" style={{ color: selectedApp.details.incomeVerification === 'VERIFIED' ? '#4ADE80' : '#FFC107' }}>
-                  {selectedApp.details.incomeVerification}
-                </div>
-              </div>
-              <div className="data-cell">
-                <div className="data-label">Fraud Probability</div>
-                <div className="data-value">{selectedApp.details.fraudProbability}</div>
-              </div>
-            </div>
-            <div className="ai-analysis">
-              <div className="ai-row">
-                <div className="ai-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      {currentView === 'applications' && (
+        <div className="workspace">
+          <div className="list-panel glass-panel">
+            <div className="list-header">
+              <input type="text" className="search-bar" placeholder="Buscar ID de solicitud..." />
+              <div className="filter-dropdown" ref={filterDropdownRef}>
+                <button
+                  className="filter-dropdown-trigger"
+                  onClick={() => setFilterOpen(o => !o)}
+                >
+                  <span style={{ color: statusFilter !== 'all' ? statusColors[statusFilter] : 'var(--text-primary)' }}>
+                    {STATUS_FILTERS.find(f => f.value === statusFilter)?.label}
+                  </span>
+                  <svg
+                    width="12" height="12" viewBox="0 0 12 12" fill="none"
+                    style={{ transform: filterOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                  >
+                    <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
+                </button>
+                {filterOpen && (
+                  <div className="filter-dropdown-menu glass-panel">
+                    {STATUS_FILTERS.map(f => (
+                      <div
+                        key={f.value}
+                        className={`filter-dropdown-item ${statusFilter === f.value ? 'active' : ''}`}
+                        onClick={() => { setStatusFilter(f.value); setSelectedApp(null); setFilterOpen(false) }}
+                      >
+                        <span
+                          className="filter-dot"
+                          style={{ background: f.value !== 'all' ? statusColors[f.value] : 'transparent', border: f.value === 'all' ? '1px solid var(--glass-border)' : 'none' }}
+                        />
+                        <span style={{ color: f.value !== 'all' ? statusColors[f.value] : 'var(--text-primary)' }}>
+                          {f.label}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="app-list">
+              {loading && (
+                <p style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center', fontSize: '13px' }}>
+                  Cargando solicitudes…
+                </p>
+              )}
+              {!loading && applications.length === 0 && (
+                <p style={{ color: 'var(--text-secondary)', padding: '20px', textAlign: 'center', fontSize: '13px' }}>
+                  No hay solicitudes.
+                </p>
+              )}
+              {applications.map((app) => (
+                <div
+                  key={app.id}
+                  className={`app-item ${selectedApp?.id === app.id ? 'selected' : ''}`}
+                  onClick={() => handleSelectApp(app)}
+                >
+                  <div className="app-meta">
+                    <span>#{app.id.slice(0, 8).toUpperCase()}</span>
+                    <span>{app.time}</span>
+                  </div>
+                  <div className="app-name">{app.name}</div>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <span
+                      className="risk-pill"
+                      style={{ color: riskColors[app.risk], borderColor: riskColors[app.risk] }}
+                    >
+                      Riesgo: {riskLabel(app.risk)}
+                    </span>
+                    <span style={{ fontSize: '10px', color: statusColors[app.status] ?? 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                      {app.status === 'processing' ? 'Pendiente' : app.status === 'approved' ? 'Aprobada' : 'Rechazada'}
+                    </span>
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.95rem', lineHeight: 1.6, color: '#FFFFFF' }}>
-                  <strong style={{ textTransform: 'uppercase' }}>
-                    {selectedApp.details.incomeVerification === 'VERIFIED' ? 'Verification Complete:' : 'Income Discrepancy Detected:'}
-                  </strong> {selectedApp.details.aiAnalysis}
+              ))}
+            </div>
+          </div>
+
+          {selectedApp && (
+            <div className="detail-panel">
+              <div className="detail-top">
+                <div>
+                  <h2 className="chrome-text detail-name">{selectedApp.name}</h2>
+                  <p className="detail-id">#{selectedApp.id.slice(0, 8).toUpperCase()}</p>
+                </div>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <div className="credit-score-badge" style={{ borderColor: riskColors[selectedApp.risk] }}>
+                    <div className="score-label">SCORE</div>
+                    <div className="score-value" style={{ color: riskColors[selectedApp.risk] }}>
+                      {selectedApp.creditScore}
+                    </div>
+                  </div>
+                  <div className="credit-score-badge" style={{ borderColor: buroCreditColor(selectedApp.buroCreditScore) }}>
+                    <div className="score-label">BURÓ</div>
+                    <div className="score-value" style={{ color: buroCreditColor(selectedApp.buroCreditScore) }}>
+                      {selectedApp.buroCreditScore ?? '—'}
+                    </div>
+                    <div className="score-label" style={{ color: buroCreditColor(selectedApp.buroCreditScore), marginTop: '2px' }}>
+                      {buroCreditLabel(selectedApp.buroCreditScore)}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="detail-card">
-            <div className="card-header">
-              <span className="card-title">Financial Profile</span>
-            </div>
-            <div className="data-grid">
-              <div className="data-cell">
-                <div className="data-label">Employment</div>
-                <div className="data-value">{selectedApp.details.employment}</div>
+              <div className="glass-panel data-card">
+                <div className="card-title-sm">Información de Solicitud</div>
+                <div className="data-grid-3">
+                  <div className="data-cell">
+                    <div className="data-label">Monto Solicitado</div>
+                    <div className="data-value">{selectedApp.details.requestedAmount}</div>
+                  </div>
+                  <div className="data-cell">
+                    <div className="data-label">Plazo</div>
+                    <div className="data-value">{selectedApp.details.term}</div>
+                  </div>
+                  <div className="data-cell">
+                    <div className="data-label">Score Crediticio</div>
+                    <div className="data-value">{selectedApp.details.creditBuro}</div>
+                  </div>
+                  <div className="data-cell">
+                    <div className="data-label">Ingresos</div>
+                    <div className="data-value">{selectedApp.details.incomeVerification}</div>
+                  </div>
+                  <div className="data-cell">
+                    <div className="data-label">Fraude Est.</div>
+                    <div className="data-value">{selectedApp.details.fraudProbability}</div>
+                  </div>
+                  <div className="data-cell">
+                    <div className="data-label">Renta Mensual</div>
+                    <div className="data-value">{selectedApp.details.monthlyRent}</div>
+                  </div>
+                </div>
               </div>
-              <div className="data-cell">
-                <div className="data-label">Employer</div>
-                <div className="data-value">{selectedApp.details.employer}</div>
-              </div>
-              <div className="data-cell">
-                <div className="data-label">Tenure</div>
-                <div className="data-value">{selectedApp.details.tenure}</div>
-              </div>
-              <div className="data-cell">
-                <div className="data-label">Monthly Rent/Mortgage</div>
-                <div className="data-value">{selectedApp.details.monthlyRent}</div>
-              </div>
-              <div className="data-cell">
-                <div className="data-label">Requested Amount</div>
-                <div className="data-value">{selectedApp.details.requestedAmount}</div>
-              </div>
-              <div className="data-cell">
-                <div className="data-label">Term</div>
-                <div className="data-value">{selectedApp.details.term}</div>
-              </div>
-            </div>
-          </div>
 
-          <div className="action-bar">
-            <button className="btn btn-reject">Reject Application</button>
-            <button className="btn btn-secondary">Request More Info</button>
-            <button className="btn btn-primary">Approve Loan</button>
-          </div>
+              <div className="glass-panel data-card">
+                <div className="card-title-sm">Empleo</div>
+                <div className="data-grid-3">
+                  <div className="data-cell">
+                    <div className="data-label">Tipo</div>
+                    <div className="data-value">{selectedApp.details.employment}</div>
+                  </div>
+                  <div className="data-cell">
+                    <div className="data-label">Empresa</div>
+                    <div className="data-value">{selectedApp.details.employer}</div>
+                  </div>
+                  <div className="data-cell">
+                    <div className="data-label">Antigüedad</div>
+                    <div className="data-value">{selectedApp.details.tenure ?? '—'}</div>
+                  </div>
+                </div>
+              </div>
 
-          <div style={{ height: '60px' }}></div>
+              <div className="glass-panel data-card ai-card">
+                <div className="card-title-sm" style={{ color: 'var(--accent-blue)' }}>Análisis de Riesgo</div>
+                {selectedApp.details.analysisData ? (() => {
+                  const a = selectedApp.details.analysisData
+                  return (
+                    <>
+                      <p className="analysis-summary">{a.summary}</p>
+
+                      {a.reasons.length > 0 && (
+                        <div className="analysis-section">
+                          <div className="analysis-section-label">Alertas Detectadas</div>
+                          <div className="analysis-alerts">
+                            {a.reasons.map((r, i) => {
+                              const key = r.split(':')[0]
+                              const label = FRAUD_REASON_LABELS[key] ?? r
+                              return (
+                                <div key={i} className="analysis-alert-item">
+                                  <span className="alert-dot" />
+                                  <span>{label}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div
+                        className="analysis-rec"
+                        style={{ borderColor: a.recColor + '50', background: a.recColor + '12' }}
+                      >
+                        <div className="analysis-section-label">Recomendación</div>
+                        <p style={{ color: a.recColor, margin: 0, fontSize: '0.85rem', lineHeight: 1.6 }}>
+                          {a.recommendation}
+                        </p>
+                      </div>
+                    </>
+                  )
+                })() : <p className="ai-text">—</p>}
+              </div>
+
+              {actionError && (
+                <p style={{ color: '#f87171', fontSize: '13px', textAlign: 'center' }}>{actionError}</p>
+              )}
+
+              {selectedApp.status === 'processing' && (
+                <div className="action-row">
+                  <button className="action-btn reject" onClick={handleReject} disabled={actionLoading} style={{ opacity: actionLoading ? 0.4 : 1 }}>RECHAZAR</button>
+                  <button className="action-btn secondary">SOLICITAR DOCS</button>
+                  <button className="action-btn liquid-btn" onClick={handleApprove} disabled={actionLoading} style={{ opacity: actionLoading ? 0.4 : 1 }}>{actionLoading ? '…' : 'APROBAR'}</button>
+                </div>
+              )}
+              {selectedApp.status === 'approved' && (
+                <div style={{ textAlign: 'center', padding: '16px', color: '#6ee7b7', fontSize: '13px', fontWeight: 600, letterSpacing: '1px' }}>
+                  ✓ SOLICITUD APROBADA
+                </div>
+              )}
+              {selectedApp.status === 'rejected' && (
+                <div style={{ textAlign: 'center', padding: '16px', color: '#f87171', fontSize: '13px', fontWeight: 600, letterSpacing: '1px' }}>
+                  ✗ SOLICITUD RECHAZADA
+                </div>
+              )}
+            </div>
+          )}
         </div>
-      </div>
+      )}
     </div>
   )
 }

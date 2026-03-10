@@ -1,6 +1,9 @@
 /* Wrapper plano — sin caja ni fondo propio */
 .ine-scanner {
   width: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
 }
 
 /* ── Header: volver + steps en una sola fila ────────────── */
@@ -8,29 +11,31 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 24px;
-  background: var(--brand-blue);
-  border-bottom: 2px solid #FFFFFF;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .ine-back-btn {
   flex-shrink: 0;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  color: #FFFFFF;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
   padding: 6px 14px;
-  font-family: var(--font-family);
+  font-family: var(--font-main);
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
 }
 
 .ine-back-btn:hover {
-  border-color: #FFFFFF;
-  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .ine-steps-track {
@@ -45,17 +50,17 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--font-family);
+  font-family: var(--font-main);
   font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.25);
   transition: color 0.2s;
 }
 
-.ine-step.active { color: #FFFFFF; }
-.ine-step.done   { color: var(--risk-low); }
+.ine-step.active { color: var(--text-primary); }
+.ine-step.done   { color: #6ee7b7; }
 
 .ine-step-dot {
   width: 6px;
@@ -68,18 +73,39 @@
 .ine-step-divider {
   width: 20px;
   height: 1px;
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--glass-border);
   flex-shrink: 0;
+}
+
+/* ── Error de cámara ────────────────────────────────────── */
+.ine-camera-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 48px 24px;
+  text-align: center;
+  background: #000;
+}
+
+.ine-camera-error p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #f87171;
+  font-family: var(--font-main);
+  line-height: 1.5;
 }
 
 /* ── Área de cámara ─────────────────────────────────────── */
 .ine-camera {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9; /* fija la altura al mismo ratio que el stream de video */
+  aspect-ratio: 16 / 9;
   line-height: 0;
   background: #000;
   overflow: hidden;
+  max-height: calc(100vh - 180px);
 }
 
 /* Overlay limpio — solo el recuadro guía, sin texto */
@@ -92,26 +118,27 @@
 }
 
 /* Guía INE — 72% ancho, proporción ID-1 (1.585:1)
-   box-shadow trick: oscurece todo excepto el interior del recuadro */
+   box-shadow trick: oscurece todo excepto el interior */
 .ine-guide {
   position: relative;
   width: 72%;
   aspect-ratio: 1.585;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  border-radius: 6px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 8px;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.52);
   pointer-events: none;
 }
 
-/* Esquinas de la guía INE */
+/* Esquinas metálicas de la guía INE */
 .ine-guide::before,
 .ine-guide::after {
   content: '';
   position: absolute;
   width: 20px;
   height: 20px;
-  border-color: #FFFFFF;
+  border-color: #ffffff;
   border-style: solid;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.6));
 }
 
 .ine-guide::before {
@@ -128,16 +155,23 @@
   border-radius: 0 4px 0 0;
 }
 
-/* Guía rostro — 42% ancho, elipse de retrato (0.73 ratio)
-   Mismos porcentajes que el JS de crop                     */
+/* Guía rostro — 62% ancho, elipse de retrato (0.73 ratio)
+   Mismos porcentajes que el JS de crop */
 .face-guide {
   position: relative;
-  width: 42%;
+  width: 62%;
   aspect-ratio: 0.73;
-  border: 2px solid rgba(255, 255, 255, 0.9);
+  border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.52);
   pointer-events: none;
+}
+
+/* Face mode — portrait container so the selfie fills naturally */
+.ine-camera.face-mode {
+  aspect-ratio: 3 / 4;
+  max-width: 380px;
+  margin: 0 auto;
 }
 
 /* ── Barra de instrucciones + acciones ──────────────────── */
@@ -146,29 +180,29 @@
   flex-direction: column;
   gap: 14px;
   padding: 20px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(28, 85, 255, 0.7);
+  border-top: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .ine-instruction-text {
   text-align: center;
-  font-family: var(--font-family);
-  font-size: 0.78rem;
+  font-family: var(--font-main);
+  font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #FFFFFF;
+  color: var(--text-primary);
   line-height: 1.4;
 }
 
 .ine-instruction-text span {
   display: block;
-  margin-top: 3px;
-  font-size: 0.68rem;
+  margin-top: 4px;
+  font-size: 0.72rem;
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  opacity: 0.6;
+  color: var(--text-secondary);
 }
 
 .ine-actions-buttons {
@@ -176,14 +210,109 @@
   gap: 12px;
 }
 
-.ine-actions-buttons .btn {
+/* Botón primario (confirmar / tomar foto) */
+.ine-btn-primary {
   flex: 1;
+  padding: 14px 24px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: linear-gradient(135deg, #e2e8f0 0%, #94a3b8 100%);
+  color: #0f172a;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 0 8px 20px -5px rgba(148, 163, 184, 0.35),
+              inset 0 2px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 0.1s, filter 0.1s;
+  position: relative;
+  overflow: hidden;
+}
+
+.ine-btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 50%;
+  background: linear-gradient(to bottom, rgba(255,255,255,0.7), transparent);
+  opacity: 0.25;
+}
+
+.ine-btn-primary:hover {
+  transform: scale(1.02);
+  filter: brightness(1.08);
+}
+
+/* Botón de rechazo (volver a tomar) */
+.ine-btn-reject {
+  flex: 1;
+  padding: 14px 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  background: transparent;
+  color: #f87171;
+  font-weight: 700;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.ine-btn-reject:hover {
+  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(248, 113, 113, 0.7);
 }
 
 /* Preview de la captura (ya recortada) */
 .ine-preview {
   width: 100%;
   height: 100%;
-  object-fit: contain; /* escala la foto sin deformar el contenedor */
+  object-fit: contain;
   display: block;
+}
+
+/* ── Mobile responsive ───────────────────────────────────── */
+@media (max-width: 640px) {
+  .ine-scanner {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .ine-steps {
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .ine-step {
+    font-size: 0.6rem;
+  }
+
+  /* Camera taller on portrait mobile — give more room for card */
+  .ine-camera {
+    aspect-ratio: 4 / 3;
+  }
+
+  /* Face mode on mobile — full width portrait */
+  .ine-camera.face-mode {
+    aspect-ratio: 3 / 4;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .ine-actions {
+    padding: 16px 16px;
+    gap: 12px;
+  }
+
+  .ine-instruction-text {
+    font-size: 0.78rem;
+  }
+
+  .ine-btn-primary,
+  .ine-btn-reject {
+    padding: 14px 16px;
+    font-size: 0.8rem;
+  }
 }

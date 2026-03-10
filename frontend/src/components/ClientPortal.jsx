@@ -1,91 +1,1185 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import './ClientPortal.css'
 import Logo from './Logo'
 import INEScanner from './INEScanner'
+import CardSwap, { Card } from './CardSwap'
+import CreditCard from './CreditCard'
+import LiquidDashboard from './LiquidDashboard'
+import { API_URL } from '../config'
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+const STEPS = ['upload', 'rfc', 'income', 'credit']
+
+const incomeRangeToNumber = (range) => ({
+  '5-15':  10000,
+  '15-30': 22500,
+  '30-50': 40000,
+  '50+':   60000,
+}[range] ?? 0)
+
+function StepDots({ step }) {
+  const idx = STEPS.indexOf(step)
+  return (
+    <div className="step-dots">
+      {STEPS.map((s, i) => (
+        <div key={s} className={`step-dot ${i < idx ? 'done' : i === idx ? 'active' : ''}`} />
+      ))}
+    </div>
+  )
+}
+
+const INCOME_TYPES = [
+  {
+    key: 'asalariado', label: 'Asalariado',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="7" width="20" height="14" rx="2"/>
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'independiente', label: 'Independiente',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="3" width="20" height="13" rx="2"/>
+        <path d="M8 21h8"/><path d="M12 17v4"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'empresario', label: 'Empresario',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 22h20"/>
+        <path d="M6 2h12a2 2 0 0 1 2 2v18H4V4a2 2 0 0 1 2-2z"/>
+        <path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'pensionado', label: 'Pensionado',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        <path d="M9 12l2 2 4-4"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'estudiante', label: 'Estudiante',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+        <path d="M6 12v5c0 2 2 3 6 3s6-1 6-3v-5"/>
+      </svg>
+    ),
+  },
+  {
+    key: 'sin_ingresos', label: 'Sin ingresos propios',
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    ),
+  },
+]
+
+const INCOME_RANGES = [
+  { key: '5-15',  label: '$5k – $15k' },
+  { key: '15-30', label: '$15k – $30k' },
+  { key: '30-50', label: '$30k – $50k' },
+  { key: '50+',   label: '$50k+' },
+]
+
+const REAPPLY_LOCK_DAYS = 90
+
+function computeCredit(type, range) {
+  const mult = { asalariado: 1, independiente: 0.9, empresario: 1.3, pensionado: 0.75, estudiante: 0.5, sin_ingresos: 0.35 }
+  const base = { '5-15': 12000, '15-30': 30000, '30-50': 55000, '50+': 90000 }
+  return Math.min(Math.round((base[range] * mult[type]) / 1000) * 1000, 100000)
+}
+
+function getCardTier(amount) {
+  if (amount >= 60000) return { label: 'BANCAFIEL ORO',     cls: 'tier-gold'    }
+  if (amount >= 20000) return { label: 'BANCAFIEL CLÁSICA', cls: 'tier-classic' }
+  return                      { label: 'BANCAFIEL BÁSICA',  cls: 'tier-basic'   }
+}
+
+// ── Component ──────────────────────────────────────────────────────────────
 function ClientPortal({ active }) {
-  const [showScanner, setShowScanner]       = useState(false)
-  const [capturedINEFront, setCapturedINEFront] = useState(null)
-  const [capturedINEBack, setCapturedINEBack]   = useState(null)
-  const [capturedFace, setCapturedFace]         = useState(null)
+  const [step,          setStep]          = useState('landing')
+  const [uploadedFile,  setUploadedFile]  = useState(null)
+  const [isDragging,    setIsDragging]    = useState(false)
+  const [rfc,           setRfc]           = useState('')
+  const [email,         setEmail]         = useState('')
+  const [authMode,      setAuthMode]      = useState('new')     // 'new' | 'existing'
+  const [authPassword,  setAuthPassword]  = useState('')
+  const [incomeType,    setIncomeType]    = useState(null)
+  const [incomeRange,   setIncomeRange]   = useState(null)
+  const [creditLine,    setCreditLine]    = useState(0)
+  const [capturedName,  setCapturedName]  = useState('')
+  const [capturedINEFile, setCapturedINEFile] = useState(null)
+  const [applicationId, setApplicationId] = useState(null)
+  const [submitError,   setSubmitError]   = useState(null)
+  const [authError,     setAuthError]     = useState(null)
+  const [authLoading,   setAuthLoading]   = useState(false)
+  const [authStep,      setAuthStep]      = useState('email') // 'email' | 'password'
+  const [trackingData,  setTrackingData]  = useState(null)
+  const [trackingLoading, setTrackingLoading] = useState(false)
+  const [dobDay,        setDobDay]        = useState('')
+  const [dobMonth,      setDobMonth]      = useState('')
+  const [dobYear,       setDobYear]       = useState('')
+  const [verifiedData,  setVerifiedData]  = useState(null)
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [verifyError,   setVerifyError]   = useState(null)
+  const [editName,      setEditName]      = useState('')
+  const [editCurp,      setEditCurp]      = useState('')
+  const [editDob,       setEditDob]       = useState('')
+  const [editAddress,   setEditAddress]   = useState('')
+  const fileInputRef    = useRef(null)
+  const dobMonthRef     = useRef(null)
+  const dobYearRef      = useRef(null)
 
-  const handleCapture = (image, mode) => {
-    if (mode === 'card-front') {
-      setCapturedINEFront(image)
-    } else if (mode === 'card-back') {
-      setCapturedINEBack(image)
+  const authValid = email.includes('@') && email.includes('.')
+  const canSignIn = authValid && authPassword.length >= 6
+  const getRejectionSeenKey = (userEmail, folio) => `bf_rejection_seen_${String(userEmail || '').toLowerCase()}_${String(folio || '').toUpperCase()}`
+
+  const handleAuth = async () => {
+    setAuthError(null)
+    setAuthLoading(true)
+    try {
+      const endpoint = authMode === 'new' ? '/api/auth/register' : '/api/auth/login'
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: authPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        const msg = (typeof data.error === 'string' && data.error) ? data.error : 'Correo o contraseña incorrectos'
+        setAuthError(msg); setAuthLoading(false); return
+      }
+
+      localStorage.setItem('bf_token', data.token)
+      localStorage.setItem('bf_email', data.email)
+
+      if (authMode === 'new') {
+        setStep('kyc-notice')
+      } else {
+        // Existing user — fetch their application status
+        if (data.hasApplication && data.folio) {
+          setApplicationId(data.folio)
+          const statusRes = await fetch(`${API_URL}/api/loans/status?folio=${data.folio}&email=${data.email}`)
+          if (statusRes.ok) {
+            const statusData = await statusRes.json()
+            const isRejected = statusData.status === 'REJECTED' || statusData.status === 'AUTO_REJECTED'
+            if (isRejected) {
+              const seenKey = getRejectionSeenKey(data.email, data.folio)
+              if (localStorage.getItem(seenKey)) {
+                // Already saw rejection screen once — show blocked re-apply view
+                setStep('reapply-blocked')
+              } else {
+                // First time seeing rejection — show the red X screen
+                localStorage.setItem(seenKey, '1')
+                setTrackingData(statusData)
+                setStep('tracking')
+              }
+            } else {
+              setTrackingData(statusData)
+              setStep('tracking')
+            }
+          } else {
+            setStep('tracking')
+          }
+        } else {
+          setStep('kyc-notice')
+        }
+      }
+    } catch (err) {
+      console.error('handleAuth error:', err)
+      setAuthError('Error de conexión. Intenta de nuevo.')
+    }
+    setAuthLoading(false)
+  }
+
+  const handleShowTracking = async () => {
+    setTrackingLoading(true)
+    try {
+      const folio = applicationId?.slice(0, 8).toUpperCase()
+      const res = await fetch(`${API_URL}/api/loans/status?folio=${folio}&email=${encodeURIComponent(email)}`)
+      if (res.ok) setTrackingData(await res.json())
+    } catch (e) { /* show screen anyway with defaults */ }
+    setTrackingLoading(false)
+    setStep('tracking')
+  }
+
+  // KYC capture — store name + INE image blob, then verify synchronously
+  const handleCapture = async (image, mode, name) => {
+    if (mode === 'card-combined') {
+      if (image) setCapturedINEFile(image)
     } else if (mode === 'face') {
-      setCapturedFace(image)
-      setShowScanner(false) // cierra al completar el último paso
+      if (name) setCapturedName(name)
+
+      // Verify INE with backend before advancing
+      if (capturedINEFile) {
+        setVerifyError(null)
+        setVerifyLoading(true)
+        setStep('verify-ine')
+        try {
+          const b64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result.split(',')[1])
+            reader.onerror = reject
+            reader.readAsDataURL(capturedINEFile)
+          })
+          const res = await fetch(`${API_URL}/api/documents/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: b64 }),
+          })
+          const data = await res.json()
+          if (res.ok && data.success) {
+            setVerifiedData(data)
+            setEditName(data.fields?.full_name || '')
+            setEditCurp(data.fields?.curp || '')
+            setEditDob(data.fields?.date_of_birth || '')
+            setEditAddress(data.fields?.address || '')
+          } else {
+            setVerifyError(data.error || 'No se pudo verificar tu INE.')
+          }
+        } catch {
+          setVerifyError('Error de conexión. Intenta de nuevo.')
+        }
+        setVerifyLoading(false)
+      } else {
+        setStep('complete')
+      }
     }
   }
 
+  const handleActivar = async () => {
+    setSubmitError(null)
+    setStep('loading')
+    try {
+      // 1. Create the loan application
+      const res = await fetch(`${API_URL}/api/loans`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          applicantName:  capturedName || rfc,
+          applicantEmail: email,
+          loanAmount:     creditLine,
+          applicationType: 'CREDIT_CARD',
+          monthlyIncome:  incomeRangeToNumber(incomeRange),
+          existingDebt:   0,
+          dateOfBirth:    `${dobYear}-${dobMonth.padStart(2,'0')}-${dobDay.padStart(2,'0')}`,
+          verifiedCurp:   editCurp || undefined,
+        }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+
+      // 2. Upload INE scan (combined front+back JPEG) to S3 if URL provided
+      if (capturedINEFile && data.uploadUrls?.ine) {
+        await fetch(data.uploadUrls.ine.url, {
+          method: 'PUT',
+          body: capturedINEFile,
+          headers: { 'Content-Type': 'image/jpeg' },
+        })
+      }
+
+      // 3. Upload proof of address to S3 if URL provided
+      if (uploadedFile && data.uploadUrls?.proof_of_address) {
+        await fetch(data.uploadUrls.proof_of_address.url, {
+          method: 'PUT',
+          body: uploadedFile,
+          headers: { 'Content-Type': uploadedFile.type },
+        })
+      }
+
+      setApplicationId(data.applicationId)
+      setStep('confirmed')
+    } catch (err) {
+      console.error(err)
+      setSubmitError('Algo salió mal. Intenta de nuevo.')
+      setStep('credit')
+    }
+  }
+
+  // Auto-advance: KYC complete → upload
+  useEffect(() => {
+    if (step !== 'complete') return
+    const t = setTimeout(() => setStep('upload'), 1800)
+    return () => clearTimeout(t)
+  }, [step])
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) setUploadedFile(file)
+  }
+
+  const goToCredit = () => {
+    setCreditLine(computeCredit(incomeType, incomeRange))
+    setStep('credit')
+  }
+
+  if (!active) return null
+
+  // Shared computed values — used by card-reveal and approved dashboard
+  const revealName   = capturedName || trackingData?.applicantName || trackingData?.applicant_name || trackingData?.name || ''
+  const revealAmount = creditLine || trackingData?.loanAmount || trackingData?.loan_amount || trackingData?.credit_line || 0
+  const revealTier   = getCardTier(revealAmount)
+  const cardLastFour = applicationId ? applicationId.replace(/-/g, '').slice(-4).toUpperCase() : '••••'
+  const cardExpiry   = (() => {
+    const d = new Date()
+    d.setFullYear(d.getFullYear() + 3)
+    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(-2)}`
+  })()
+
+  if (step === 'approved') {
+    return (
+      <LiquidDashboard
+        active={true}
+        userName={revealName}
+        creditLine={revealAmount}
+        cardTier={revealTier}
+        cardLastFour={cardLastFour}
+        cardExpiry={cardExpiry}
+      />
+    )
+  }
+
+  const tier = getCardTier(creditLine)
+
   return (
-    <div className={`app-view client-view ${active ? 'active' : ''}`}>
-      <div className={`portal-card ${showScanner ? 'scanner-mode' : ''}`}>
-        {showScanner ? (
-          <div className="scanner-view">
-            <INEScanner onCapture={handleCapture} onBack={() => setShowScanner(false)} />
+    <div className="client-view">
+
+      {/* ── LANDING ── */}
+      {step === 'landing' && (
+        <div className="kyc-landing-split glass-panel">
+
+          {/* Left: copy + CTA */}
+          <div className="kyc-landing-left">
+            <Logo />
+            <div className="kyc-intro">
+              <h1>Solicita tu tarjeta</h1>
+              <p>100% digital · Menos de 5 minutos</p>
+            </div>
+            <button className="liquid-btn kyc-cta" onClick={() => setStep('auth')}>
+              Empezar
+            </button>
           </div>
-        ) : (
-          <>
-            <div className="portal-header">
-              <Logo className="portal-title" />
-              <h1 style={{ fontSize: '2.5rem', fontWeight: 900, marginTop: '24px', lineHeight: 0.9, textTransform: 'uppercase' }}>
-                Secure Document Portal
-              </h1>
-              <p style={{ color: 'rgba(255,255,255,0.7)', marginTop: '16px', lineHeight: 1.5, fontSize: '1.1rem', maxWidth: '90%' }}>
-                Please upload the required documents to finalize your loan application.
+
+          {/* Right: animated card stack */}
+          <div className="kyc-landing-right">
+            <CardSwap
+              width={300}
+              height={190}
+              cardDistance={44}
+              verticalDistance={30}
+              delay={3200}
+              pauseOnHover={false}
+              skewAmount={4}
+              easing="elastic"
+            >
+              <Card>
+                <CreditCard type="gray-dark" tier="BÁSICA"   number="•••• •••• •••• 1204" expiry="09/27" />
+              </Card>
+              <Card>
+                <CreditCard type="blue-dark" tier="CLÁSICA"  number="•••• •••• •••• 5589" expiry="03/28" />
+              </Card>
+              <Card>
+                <CreditCard type="gold-dark" tier="ORO"      number="•••• •••• •••• 8831" expiry="11/29" />
+              </Card>
+            </CardSwap>
+          </div>
+
+        </div>
+      )}
+
+      {/* ── AUTH ── */}
+      {step === 'auth' && (
+        <div className="kyc-card glass-panel">
+          <Logo />
+
+          {/* Tab toggle: new vs existing */}
+          <div className="auth-tab-toggle">
+            <button
+              className={`auth-tab ${authMode === 'new' ? 'active' : ''}`}
+              onClick={() => { setAuthMode('new'); setAuthPassword(''); setAuthStep('email'); setAuthError(null) }}
+            >
+              Nuevo cliente
+            </button>
+            <button
+              className={`auth-tab ${authMode === 'existing' ? 'active' : ''}`}
+              onClick={() => setAuthMode('existing')}
+            >
+              Ya tengo cuenta
+            </button>
+          </div>
+
+          <div className="kyc-intro" style={{ gap: '6px' }}>
+            <h1 style={{ fontSize: '1.5rem' }}>
+              {authMode === 'new'
+                ? (authStep === 'email' ? 'Crea tu cuenta' : 'Crea tu contraseña')
+                : 'Bienvenido de vuelta'}
+            </h1>
+            <p>
+              {authMode === 'new'
+                ? (authStep === 'email' ? 'Ingresa tu correo para comenzar.' : `Cuenta: ${email}`)
+                : 'Ingresa tu correo y contraseña.'}
+            </p>
+          </div>
+
+          <div className="auth-fields">
+            {/* Email: always shown for existing; only on step 'email' for new */}
+            {(authMode === 'existing' || authStep === 'email') && (
+              <input
+                className="rfc-input"
+                type="email"
+                placeholder="correo@ejemplo.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoFocus
+              />
+            )}
+            {/* Password: always shown for existing; only on step 'password' for new */}
+            {(authMode === 'existing' || authStep === 'password') && (
+              <input
+                className="rfc-input"
+                type="password"
+                placeholder={authMode === 'new' ? 'Crea una contraseña (mín. 6 caracteres)' : 'Contraseña'}
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                autoFocus={authMode === 'new' && authStep === 'password'}
+              />
+            )}
+          </div>
+
+          {authError && (
+            <div className="auth-error-box">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
+                <circle cx="8" cy="8" r="7" stroke="#f87171" strokeWidth="1.5"/>
+                <path d="M8 4.5v4M8 10.5v1" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              {String(authError)}
+            </div>
+          )}
+
+          {/* Step 1 for new: just validate email and advance */}
+          {authMode === 'new' && authStep === 'email' && (
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!authValid}
+              style={{ opacity: authValid ? 1 : 0.35, cursor: authValid ? 'pointer' : 'not-allowed' }}
+              onClick={() => { setAuthError(null); setAuthStep('password') }}
+            >
+              Continuar →
+            </button>
+          )}
+
+          {/* Step 2 for new: validate password and submit */}
+          {authMode === 'new' && authStep === 'password' && (
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!canSignIn || authLoading}
+              style={{ opacity: (canSignIn && !authLoading) ? 1 : 0.35, cursor: (canSignIn && !authLoading) ? 'pointer' : 'not-allowed' }}
+              onClick={handleAuth}
+            >
+              {authLoading ? 'Verificando…' : 'Continuar →'}
+            </button>
+          )}
+
+          {/* Existing user: single step */}
+          {authMode === 'existing' && (
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!canSignIn || authLoading}
+              style={{ opacity: (canSignIn && !authLoading) ? 1 : 0.35, cursor: (canSignIn && !authLoading) ? 'pointer' : 'not-allowed' }}
+              onClick={handleAuth}
+            >
+              {authLoading ? 'Verificando…' : 'Iniciar sesión →'}
+            </button>
+          )}
+
+          {authMode === 'new' && authStep === 'password'
+            ? <button className="auth-back-link" onClick={() => { setAuthError(null); setAuthStep('email') }}>← Cambiar correo</button>
+            : <button className="auth-back-link" onClick={() => { setAuthError(null); setAuthStep('email'); setStep('landing') }}>← Volver</button>
+          }
+        </div>
+      )}
+
+      {/* ── SIGNED IN (existing client) ── */}
+      {step === 'signedin' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="check-ring">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="30" stroke="#6ee7b7" strokeWidth="1.5" opacity="0.2"/>
+              <path className="check-path" d="M18 32 L27 41 L46 22"
+                stroke="#6ee7b7" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <p className="complete-label">Sesión iniciada</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center' }}>
+            Bienvenido de vuelta,<br /><strong style={{ color: 'var(--text-primary)' }}>{email}</strong>
+          </p>
+          <button className="liquid-btn kyc-cta" onClick={() => setStep('kyc-notice')}
+            style={{ marginTop: '8px' }}>
+            Solicitar nueva tarjeta →
+          </button>
+          <button className="auth-back-link" onClick={() => setStep('auth')}>
+            ← Cambiar cuenta
+          </button>
+        </div>
+      )}
+
+      {/* ── KYC NOTICE ── */}
+      {step === 'reapply-blocked' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="check-ring">
+            <svg className="blocked-reject-icon" width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle className="blocked-reject-circle" cx="32" cy="32" r="30" />
+              <path className="blocked-reject-x" d="M22 22L42 42M42 22L22 42" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <p className="complete-label" style={{ color: '#f87171', opacity: 1, animation: 'none' }}>No disponible por ahora</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', textAlign: 'center' }}>
+            Intenta de nuevo en 90 dias.
+          </p>
+          <button
+            className="liquid-btn kyc-cta"
+            disabled={true}
+            style={{ opacity: 0.35, cursor: 'not-allowed' }}
+          >
+            Solicitar Nueva Tarjeta
+          </button>
+          <p className="blocked-days-left">{REAPPLY_LOCK_DAYS} dias restantes</p>
+          <button className="auth-back-link blocked-switch-link" onClick={() => setStep('auth')}>
+            Cambiar cuenta
+          </button>
+        </div>
+      )}
+
+      {step === 'kyc-notice' && (
+        <div className="kyc-card glass-panel kyc-notice-card">
+          <div className="kyc-notice-icons">
+            {/* Person icon */}
+            <div className="kyc-notice-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              </svg>
+            </div>
+
+            <div className="kyc-notice-plus">+</div>
+
+            {/* ID card icon */}
+            <div className="kyc-notice-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.5"
+                strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="5" width="20" height="14" rx="2"/>
+                <circle cx="8" cy="12" r="2"/>
+                <path d="M13 10h4M13 14h3"/>
+              </svg>
+            </div>
+          </div>
+
+          <div className="kyc-intro">
+            <h1>Verificación de identidad</h1>
+            <p>
+              Para continuar necesitamos verificar tu identidad.<br/>
+              Ten a la mano tu <strong style={{ color: 'var(--text-primary)' }}>INE</strong> y
+              asegúrate de estar en un lugar con <strong style={{ color: 'var(--text-primary)' }}>buena iluminación</strong>.
+            </p>
+          </div>
+
+          <div className="kyc-notice-steps">
+            <div className="kyc-notice-step">
+              <span className="kyc-notice-num">1</span>
+              <span>Fotografía frontal de tu INE</span>
+            </div>
+            <div className="kyc-notice-step">
+              <span className="kyc-notice-num">2</span>
+              <span>Fotografía trasera de tu INE</span>
+            </div>
+            <div className="kyc-notice-step">
+              <span className="kyc-notice-num">3</span>
+              <span>Selfie para confirmar tu identidad</span>
+            </div>
+          </div>
+
+          <button className="liquid-btn kyc-cta" onClick={() => setStep('dob')}>
+            Comenzar verificación →
+          </button>
+
+          <button className="auth-back-link" onClick={() => setStep('auth')}>
+            ← Volver
+          </button>
+        </div>
+      )}
+
+      {/* ── FECHA DE NACIMIENTO ── */}
+      {step === 'dob' && (() => {
+        const dayOk   = dobDay.length >= 1   && parseInt(dobDay)   >= 1  && parseInt(dobDay)   <= 31
+        const monthOk = dobMonth.length >= 1 && parseInt(dobMonth) >= 1  && parseInt(dobMonth) <= 12
+        const yearOk  = dobYear.length === 4 && parseInt(dobYear)  >= 1900 && parseInt(dobYear) <= new Date().getFullYear() - 17
+        const dobValid = dayOk && monthOk && yearOk
+        return (
+          <div className="kyc-card glass-panel">
+            <div className="kyc-intro">
+              <h1>¿Cuál es tu fecha de nacimiento?</h1>
+              <p>Necesitamos verificar que seas mayor de 18 años.</p>
+            </div>
+
+            <div className="dob-fields">
+              <div className="dob-field-wrap">
+                <label className="dob-label">Día</label>
+                <input
+                  className="dob-input"
+                  type="number"
+                  placeholder="DD"
+                  min={1} max={31}
+                  maxLength={2}
+                  value={dobDay}
+                  autoFocus
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,2)
+                    setDobDay(v)
+                    if (v.length === 2) dobMonthRef.current?.focus()
+                  }}
+                />
+              </div>
+              <span className="dob-sep">/</span>
+              <div className="dob-field-wrap">
+                <label className="dob-label">Mes</label>
+                <input
+                  className="dob-input"
+                  type="number"
+                  placeholder="MM"
+                  min={1} max={12}
+                  maxLength={2}
+                  ref={dobMonthRef}
+                  value={dobMonth}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,2)
+                    setDobMonth(v)
+                    if (v.length === 2) dobYearRef.current?.focus()
+                  }}
+                />
+              </div>
+              <span className="dob-sep">/</span>
+              <div className="dob-field-wrap">
+                <label className="dob-label">Año</label>
+                <input
+                  className="dob-input dob-input--year"
+                  type="number"
+                  placeholder="AAAA"
+                  min={1900}
+                  maxLength={4}
+                  ref={dobYearRef}
+                  value={dobYear}
+                  onChange={(e) => {
+                    const v = e.target.value.replace(/\D/g,'').slice(0,4)
+                    setDobYear(v)
+                  }}
+                />
+              </div>
+            </div>
+
+            <button
+              className="liquid-btn kyc-cta"
+              disabled={!dobValid}
+              style={{ opacity: dobValid ? 1 : 0.35, cursor: dobValid ? 'pointer' : 'not-allowed' }}
+              onClick={() => setStep('kyc')}
+            >
+              Continuar →
+            </button>
+
+            <button className="auth-back-link" onClick={() => setStep('kyc-notice')}>
+              ← Volver
+            </button>
+          </div>
+        )
+      })()}
+
+      {/* ── KYC CAMERA ── */}
+      {step === 'kyc' && (
+        <div className="portal-card glass-panel scanner-mode">
+          <div className="scanner-view">
+            <INEScanner onCapture={handleCapture} onBack={() => setStep('auth')} />
+          </div>
+        </div>
+      )}
+
+      {/* ── VERIFY INE ── */}
+      {step === 'verify-ine' && (
+        <div className="kyc-card glass-panel">
+          {verifyLoading ? (
+            /* Loading */
+            <div className="kyc-complete-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+              <div className="submit-spinner" />
+              <p className="complete-label" style={{ fontSize: '1rem' }}>Leyendo tu INE…</p>
+            </div>
+          ) : verifyError ? (
+            /* Error */
+            <>
+              <div className="kyc-intro" style={{ gap: '8px' }}>
+                <h1 style={{ fontSize: '1.4rem' }}>No pudimos leer tu INE</h1>
+                <p>{verifyError}</p>
+              </div>
+              <div className="verify-tips">
+                <div className="verify-tip"><span>💡</span><span>Asegúrate de que la foto esté enfocada y bien iluminada</span></div>
+                <div className="verify-tip"><span>💡</span><span>Evita reflejos y sombras sobre el documento</span></div>
+                <div className="verify-tip"><span>💡</span><span>Incluye el reverso de tu INE — ahí está el CURP</span></div>
+              </div>
+              <button className="liquid-btn kyc-cta" onClick={() => {
+                setCapturedINEFile(null)
+                setVerifyError(null)
+                setStep('kyc')
+              }}>
+                Volver a escanear →
+              </button>
+            </>
+          ) : verifiedData ? (() => {
+            const CURP_RE = /^[A-Z]{4}[0-9]{6}[HM][A-Z]{5}[A-Z0-9][0-9]$/
+            const curpEditValid = CURP_RE.test(editCurp.trim().toUpperCase())
+            return (
+            /* Success — editable fields */
+            <>
+              <div className="kyc-intro" style={{ gap: '4px' }}>
+                <h1 style={{ fontSize: '1.4rem' }}>Confirma tus datos</h1>
+                <p>Corrige cualquier campo si la lectura fue incorrecta.</p>
+              </div>
+
+              <div className="verify-edit-fields">
+                <div className="verify-edit-row">
+                  <label className="verify-edit-label">Nombre completo</label>
+                  <input
+                    className="verify-edit-input"
+                    type="text"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value.toUpperCase())}
+                    placeholder="APELLIDO PATERNO APELLIDO MATERNO NOMBRE"
+                  />
+                </div>
+                <div className="verify-edit-row">
+                  <label className="verify-edit-label">
+                    CURP
+                    <span className={`curp-badge ${curpEditValid ? 'curp-valid' : 'curp-warn'}`} style={{ marginLeft: '6px' }}>
+                      {curpEditValid ? '✓' : '!'}
+                    </span>
+                  </label>
+                  <input
+                    className="verify-edit-input verify-edit-mono"
+                    type="text"
+                    value={editCurp}
+                    maxLength={18}
+                    onChange={e => setEditCurp(e.target.value.toUpperCase().replace(/\s/g, ''))}
+                    placeholder="18 caracteres"
+                  />
+                </div>
+                <div className="verify-edit-row">
+                  <label className="verify-edit-label">Fecha de nacimiento</label>
+                  <input
+                    className="verify-edit-input"
+                    type="text"
+                    value={editDob}
+                    onChange={e => setEditDob(e.target.value)}
+                    placeholder="DD/MM/AAAA"
+                  />
+                </div>
+                <div className="verify-edit-row">
+                  <label className="verify-edit-label">Domicilio</label>
+                  <input
+                    className="verify-edit-input"
+                    type="text"
+                    value={editAddress}
+                    onChange={e => setEditAddress(e.target.value.toUpperCase())}
+                    placeholder="Calle, colonia, ciudad"
+                  />
+                </div>
+              </div>
+
+              <button
+                className="liquid-btn kyc-cta"
+                disabled={!curpEditValid}
+                style={{ opacity: curpEditValid ? 1 : 0.35, cursor: curpEditValid ? 'pointer' : 'not-allowed' }}
+                onClick={() => {
+                  if (editName) setCapturedName(editName)
+                  setStep('complete')
+                }}
+              >
+                Confirmar y continuar →
+              </button>
+              <button className="auth-back-link" onClick={() => {
+                setCapturedINEFile(null)
+                setVerifiedData(null)
+                setStep('kyc')
+              }}>
+                ← Volver a escanear
+              </button>
+            </>
+            )
+          })() : null}
+        </div>
+      )}
+
+      {/* ── KYC COMPLETE (auto-advances) ── */}
+      {step === 'complete' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="check-ring">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="30" stroke="#6ee7b7" strokeWidth="1.5" opacity="0.2"/>
+              <path className="check-path" d="M18 32 L27 41 L46 22"
+                stroke="#6ee7b7" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <p className="complete-label">Identidad verificada</p>
+        </div>
+      )}
+
+      {/* ── COMPROBANTE ── */}
+      {step === 'upload' && (
+        <div className="kyc-card glass-panel">
+          <StepDots step="upload" />
+
+          <div className="kyc-intro">
+            <h1>Comprobante de domicilio</h1>
+            <p>Recibo de luz, agua o estado de cuenta.<br/>No mayor a 3 meses.</p>
+          </div>
+
+          <div
+            className={`upload-drop-zone ${isDragging ? 'dragging' : ''} ${uploadedFile ? 'has-file' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploadedFile ? (
+              <div className="upload-file-preview">
+                <div className="upload-file-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                </div>
+                <div className="upload-file-info">
+                  <span className="upload-file-name">{uploadedFile.name}</span>
+                  <span className="upload-file-size">{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                </div>
+                <button className="upload-remove"
+                  onClick={(e) => { e.stopPropagation(); setUploadedFile(null) }}>✕</button>
+              </div>
+            ) : (
+              <div className="upload-empty">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span>PDF · JPG · PNG · max 10 MB</span>
+              </div>
+            )}
+          </div>
+
+          <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png"
+            style={{ display: 'none' }}
+            onChange={(e) => { const f = e.target.files[0]; if (f) setUploadedFile(f) }}
+          />
+
+          <button className="liquid-btn kyc-cta"
+            disabled={!uploadedFile}
+            style={{ opacity: uploadedFile ? 1 : 0.35, cursor: uploadedFile ? 'pointer' : 'not-allowed' }}
+            onClick={() => setStep('rfc')}
+          >
+            Continuar →
+          </button>
+        </div>
+      )}
+
+      {/* ── RFC ── */}
+      {step === 'rfc' && (
+        <div className="kyc-card glass-panel">
+          <StepDots step="rfc" />
+
+          <div className="kyc-intro">
+            <h1>¿Cuál es tu RFC?</h1>
+            <p>Lo encontrarás en tu constancia fiscal del SAT.</p>
+          </div>
+
+          <div className="rfc-field">
+            <input
+              className="rfc-input"
+              type="text"
+              placeholder="CURP000000XX0"
+              maxLength={13}
+              value={rfc}
+              onChange={(e) => setRfc(e.target.value.toUpperCase().replace(/[^A-Z0-9Ñ]/g, ''))}
+              autoFocus
+            />
+            <span className="rfc-hint">{rfc.length} / 12–13 caracteres</span>
+          </div>
+
+          <button className="liquid-btn kyc-cta"
+            disabled={rfc.length < 12}
+            style={{ opacity: rfc.length >= 12 ? 1 : 0.35, cursor: rfc.length >= 12 ? 'pointer' : 'not-allowed' }}
+            onClick={() => setStep('income')}
+          >
+            Continuar →
+          </button>
+        </div>
+      )}
+
+      {/* ── INGRESOS ── */}
+      {step === 'income' && (
+        <div className="kyc-card glass-panel">
+          <StepDots step="income" />
+
+          <div className="kyc-intro">
+            <h1>¿Cómo obtienes tus ingresos?</h1>
+            <p>Selecciona tu situación y rango mensual.</p>
+          </div>
+
+          <div className="income-types">
+            {INCOME_TYPES.map(t => (
+              <button
+                key={t.key}
+                className={`income-type-card ${incomeType === t.key ? 'selected' : ''}`}
+                onClick={() => setIncomeType(t.key)}
+              >
+                {t.icon}
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </div>
+
+          <div className={`income-ranges ${incomeType ? 'visible' : ''}`}>
+            {INCOME_RANGES.map(r => (
+              <button
+                key={r.key}
+                className={`income-range-chip ${incomeRange === r.key ? 'selected' : ''}`}
+                onClick={() => setIncomeRange(r.key)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+
+          <button className="liquid-btn kyc-cta"
+            disabled={!incomeType || !incomeRange}
+            style={{ opacity: (incomeType && incomeRange) ? 1 : 0.35, cursor: (incomeType && incomeRange) ? 'pointer' : 'not-allowed' }}
+            onClick={goToCredit}
+          >
+            Ver mi línea →
+          </button>
+        </div>
+      )}
+
+      {/* ── LÍNEA DE CRÉDITO ── */}
+      {step === 'credit' && (
+        <div className="kyc-card glass-panel">
+          <StepDots step="credit" />
+
+          <div className="kyc-intro">
+            <p>Línea de crédito aprobada</p>
+          </div>
+
+          <div className="credit-display">
+            <span className="credit-amount">
+              ${creditLine.toLocaleString('es-MX')}
+            </span>
+            <span className={`credit-tier ${tier.cls}`}>{tier.label}</span>
+          </div>
+
+          <div className="credit-details">
+            <div className="credit-detail-row">
+              <span>RFC registrado</span>
+              <span className="detail-val">{rfc}</span>
+            </div>
+            <div className="credit-detail-row">
+              <span>Tipo de ingreso</span>
+              <span className="detail-val" style={{ textTransform: 'capitalize' }}>{incomeType}</span>
+            </div>
+            <div className="credit-detail-row">
+              <span>Rango mensual</span>
+              <span className="detail-val">{INCOME_RANGES.find(r => r.key === incomeRange)?.label}</span>
+            </div>
+          </div>
+
+          {submitError && (
+            <p style={{ color: 'var(--error, #f87171)', fontSize: '13px', textAlign: 'center', marginTop: '8px' }}>
+              {submitError}
+            </p>
+          )}
+
+          <button className="liquid-btn kyc-cta" onClick={handleActivar}>
+            Activar mi tarjeta →
+          </button>
+        </div>
+      )}
+
+      {/* ── LOADING ── */}
+      {step === 'loading' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="submit-spinner" />
+          <p className="complete-label">Enviando solicitud…</p>
+        </div>
+      )}
+
+      {/* ── CONFIRMED ── */}
+      {step === 'confirmed' && (
+        <div className="kyc-card glass-panel kyc-complete-card">
+          <div className="check-ring">
+            <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
+              <circle cx="32" cy="32" r="30" stroke="#6ee7b7" strokeWidth="1.5" opacity="0.2"/>
+              <path className="check-path" d="M18 32 L27 41 L46 22"
+                stroke="#6ee7b7" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <p className="complete-label">¡Solicitud enviada!</p>
+          <p className="detail-id" style={{ fontFamily: 'monospace', fontSize: '18px', color: 'var(--text-primary)', marginTop: '8px' }}>
+            Folio: {applicationId?.slice(0, 8).toUpperCase()}
+          </p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '8px', textAlign: 'center' }}>
+            Te notificaremos a <strong>{email}</strong> con el resultado.
+          </p>
+          <button className="liquid-btn kyc-cta" onClick={handleShowTracking}
+            disabled={trackingLoading}
+            style={{ marginTop: '16px', opacity: trackingLoading ? 0.5 : 1 }}>
+            {trackingLoading ? 'Cargando…' : 'Ver estado →'}
+          </button>
+        </div>
+      )}
+
+      {/* ── TRACKING ── */}
+      {step === 'tracking' && (() => {
+        const defaultSteps = [
+          { label: 'Solicitud recibida',        status: 'done'    },
+          { label: 'Verificación de identidad', status: 'done'    },
+          { label: 'Análisis de documentos',    status: 'active'  },
+          { label: 'Resolución final',          status: 'pending' },
+        ]
+        const appStatus  = trackingData?.status
+        const isRejected = appStatus === 'REJECTED' || appStatus === 'AUTO_REJECTED'
+        const isApproved = appStatus === 'APPROVED'
+        const rawSteps   = trackingData?.steps || defaultSteps
+        // For rejected apps mark the last step as rejected so it shows a red X
+        const steps = isRejected
+          ? rawSteps.map((s, i) => i === rawSteps.length - 1 ? { ...s, status: 'rejected' } : s)
+          : rawSteps
+        const folio = applicationId?.slice(0, 8).toUpperCase() || trackingData?.folio
+        return (
+          <div className="kyc-card glass-panel tracking-view">
+            <Logo />
+            <div className="kyc-intro" style={{ gap: '4px' }}>
+              <h1 style={{ fontSize: '1.4rem' }}>Estado de tu solicitud</h1>
+              <p style={{ fontFamily: 'monospace', fontSize: '15px', color: 'var(--text-primary)' }}>
+                Folio {folio}
               </p>
             </div>
-            <div className="portal-body">
-              <div className="doc-list">
-                <div className="doc-item">
-                  <span style={{ fontWeight: 700, textTransform: 'uppercase' }}>Proof of Address</span>
-                  <div className="doc-status checked"></div>
-                </div>
-                
-                <div className="doc-item" onClick={() => setShowScanner(true)} style={{ cursor: 'pointer', border: (capturedINEFront && capturedINEBack && capturedFace) ? '1px solid #4CAF50' : '1px solid rgba(255,255,255,0.2)' }}>
-                  <span style={{ fontWeight: 700, textTransform: 'uppercase' }}>ID & Face Verification</span>
-                  {(capturedINEFront && capturedINEBack && capturedFace) ? (
-                    <div className="doc-status checked"></div>
-                  ) : (
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      {(!capturedINEFront || !capturedINEBack) && <span style={{ fontSize: '0.65rem', color: '#e91e63', textTransform: 'uppercase', fontWeight: 700, padding: '2px 4px', border: '1px solid #e91e63' }}>INE Pending</span>}
-                      {!capturedFace && <span style={{ fontSize: '0.65rem', color: '#e91e63', textTransform: 'uppercase', fontWeight: 700, padding: '2px 4px', border: '1px solid #e91e63' }}>Face Pending</span>}
-                    </div>
-                  )}
-                </div>
 
-                <div className="doc-item" style={{ borderStyle: 'dashed', borderColor: '#FFFFFF', background: 'rgba(255,255,255,0.1)' }}>
-                  <span style={{ fontWeight: 700, color: '#FFFFFF', textTransform: 'uppercase' }}>Bank Statement (3mo)</span>
-                  <span style={{ fontSize: '0.75rem', color: '#FFFFFF', textTransform: 'uppercase', fontWeight: 700, padding: '2px 6px', border: '1px solid white' }}>
-                    Pending
-                  </span>
+            <div className="tracking-pipeline">
+              {steps.map((s, i) => (
+                <div key={i} className={`tracking-step ${s.status}`}>
+                  <div className="tracking-node">
+                    {s.status === 'done' && (
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2.5 7 L5.5 10 L11.5 4" stroke="currentColor" strokeWidth="1.8"
+                          strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                    {s.status === 'rejected' && (
+                      <svg className="tracking-rejected-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <circle className="tracking-rejected-circle" cx="7" cy="7" r="5.5" />
+                        <path className="tracking-rejected-x" d="M4 4 L10 10 M10 4 L4 10"
+                          strokeLinecap="round"/>
+                      </svg>
+                    )}
+                    {s.status === 'active' && <div className="tracking-pulse" />}
+                  </div>
+                  {i < steps.length - 1 && <div className="tracking-connector" />}
+                  <span className="tracking-label">{s.label}</span>
+                  <span className="tracking-badge">{
+                    s.status === 'done'     ? 'Completado' :
+                    s.status === 'rejected' ? 'Rechazado'  :
+                    s.status === 'active'   ? 'En proceso' : 'Pendiente'
+                  }</span>
                 </div>
-              </div>
-
-              <div className="upload-zone">
-                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="17 8 12 3 7 8"></polyline>
-                  <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-                <h3 style={{ fontSize: '1.25rem', marginBottom: '8px', textTransform: 'uppercase', fontWeight: 800 }}>
-                  Drag & Drop Bank Statement
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-mono)' }}>
-                  PDF or JPG, max 10MB
-                </p>
-              </div>
-
-              <button className="btn btn-primary" style={{ width: '100%' }}>
-                SUBMIT DOCUMENTS
-              </button>
+              ))}
             </div>
-          </>
-        )}
-      </div>
+
+            {isRejected && (
+              <div className="rejection-banner">
+                <p>Tu solicitud fue rechazada.</p>
+              </div>
+            )}
+
+            {isApproved && steps.every(s => s.status === 'done') && (
+              <button className="liquid-btn kyc-cta card-reveal-trigger" onClick={() => setStep('card-reveal')}>
+                Comienza ahora
+              </button>
+            )}
+
+            <button className="auth-back-link" onClick={() => setStep('confirmed')}>
+              ← Volver
+            </button>
+          </div>
+        )
+      })()}
+
+      {/* ── CARD REVEAL ANIMATION ── */}
+      {step === 'card-reveal' && (() => {
+        const cardType = revealTier.cls === 'tier-gold' ? 'gold-dark' : revealTier.cls === 'tier-classic' ? 'blue-dark' : 'gray-dark'
+        return (
+          <div className="card-reveal-scene">
+            <div className="card-reveal-glow" />
+
+            <div className="card-reveal-card-wrap">
+              <div style={{ width: '300px', height: '190px' }}>
+                <CreditCard
+                  type={cardType}
+                  tier={revealTier.label.replace('BANCAFIEL ', '')}
+                  number="•••• •••• •••• ••••"
+                  expiry={cardExpiry}
+                  holder={revealName.toUpperCase()}
+                />
+              </div>
+            </div>
+
+            <div className="card-reveal-info">
+              <div className="card-reveal-limit-block">
+                <span className="card-reveal-limit-label">Línea de crédito aprobada</span>
+                <span className="card-reveal-limit">${Math.round(parseFloat(revealAmount)).toLocaleString('en-US')}</span>
+                <button className="card-reveal-continue" onClick={() => setStep('approved')}>
+                  ¡Bienvenido a BANCAFIEL!
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+
     </div>
   )
 }
