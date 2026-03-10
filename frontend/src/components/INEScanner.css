@@ -102,6 +102,8 @@
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
+  max-height: 44vh;
+  flex-shrink: 1;
   line-height: 0;
   background: #000;
   overflow: hidden;
@@ -275,6 +277,11 @@
     border-radius: 0;
     border-left: none;
     border-right: none;
+  }
+
+  /* Remove desktop max-height constraint on mobile */
+  .ine-camera {
+    max-height: none;
   }
 
   .ine-steps {

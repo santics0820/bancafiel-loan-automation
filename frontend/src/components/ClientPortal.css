@@ -36,10 +36,9 @@
   justify-content: center;
   align-items: center;
   width: 100%;
-  min-height: 100vh;
-  height: auto;
+  height: 100vh;
   padding: 24px;
-  overflow-y: auto;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -107,11 +106,11 @@
 .portal-card.scanner-mode {
   width: 820px;
   max-width: 100%;
-  display: block;
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
   padding: 0;
   overflow: hidden;
-  align-self: flex-start;
-  margin: auto;
   animation: fadeSlideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .scanner-view { width: 100%; }
