@@ -154,21 +154,15 @@
   border-radius: 0 4px 0 0;
 }
 
-/* Guía rostro — 62% ancho, elipse de retrato (0.73 ratio)
-   Mismos porcentajes que el JS de crop */
+/* Guía rostro — 42% ancho, elipse de retrato (0.73 ratio) */
 .face-guide {
   position: relative;
-  width: 62%;
+  width: 42%;
   aspect-ratio: 0.73;
   border: 2px solid rgba(255, 255, 255, 0.85);
   border-radius: 50%;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.52);
   pointer-events: none;
-}
-
-/* Face mode — portrait container so the selfie fills naturally */
-.ine-camera.face-mode {
-  aspect-ratio: 3 / 4;
 }
 
 /* ── Barra de instrucciones + acciones ──────────────────── */
@@ -275,6 +269,21 @@
     border-radius: 0;
     border-left: none;
     border-right: none;
+  }
+
+  /* Card camera: taller aspect ratio on portrait mobile */
+  .ine-camera {
+    aspect-ratio: 4 / 3;
+  }
+
+  /* Selfie step: portrait camera on mobile */
+  .ine-camera.face-mode {
+    aspect-ratio: 3 / 4;
+  }
+
+  /* Larger oval on mobile — easier to frame face */
+  .face-guide {
+    width: 62%;
   }
 
   .ine-steps {

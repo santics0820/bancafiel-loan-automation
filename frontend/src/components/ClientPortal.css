@@ -36,11 +36,8 @@
   justify-content: center;
   align-items: center;
   width: 100%;
-  min-height: 100vh;
-  height: auto;
+  height: 100vh;
   padding: 24px;
-  overflow-y: auto;
-  box-sizing: border-box;
 }
 
 /* ===== Landing 2-col split ===== */
@@ -110,8 +107,6 @@
   display: block;
   padding: 0;
   overflow: hidden;
-  align-self: flex-start;
-  margin: auto;
   animation: fadeSlideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 .scanner-view { width: 100%; }
